@@ -112,7 +112,7 @@
     if (!res.ok) {
       const msg = (data.error && data.error.message) || res.statusText;
       if (res.status === 401) throw new Error('Неверный ключ API (' + msg + ')');
-      if (res.status === 403) throw new Error('Доступ запрещён (' + msg + ')');
+      if (res.status === 403) throw new Error('Доступ запрещён (' + msg + '). Обычно это значит, что Claude API недоступен из вашей страны или у аккаунта нет доступа к выбранной модели.');
       if (res.status === 429) throw new Error('Слишком много запросов — подождите минуту (' + msg + ')');
       throw new Error('Ошибка Claude API ' + res.status + ': ' + msg);
     }
