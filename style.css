@@ -92,3 +92,4 @@ button { font: inherit; }
 .ai-note ul { margin: 4px 0 0; padding-left: 18px; }
 .list .ai { font-size: 11px; color: var(--brand); }
 .ai-note .tokens { margin-top: 6px; font-size: 12px; opacity: .75; }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--brand); text-decoration: underline; cursor: pointer; font-size: 13px; }

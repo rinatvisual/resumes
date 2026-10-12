@@ -10,10 +10,12 @@
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { /* без сохранения */ } }
   };
+  // Стандартные правила редактуры (основное из мастер-промпта)
+  const DEFAULT_RULES = "- Исправляй орфографию, пунктуацию, грамматику, опечатки, согласование слов и падежи.\n- Переписывай неудачные, обрывочные и непонятные фразы; убирай повторы, тавтологию, разговорные и эмоциональные выражения.\n- Обязанности, навыки и достижения приводи к единому деловому стилю, но сохраняй индивидуальность кандидата — не превращай текст в шаблон.\n- Слишком длинные абзацы разбивай на короткие.\n- Проверяй смысл: дублирующуюся информацию убирай, противоречия и непоследовательные даты выноси в замечания.\n- Ничего не придумывай и не преувеличивай: ни фактов, ни достижений, ни цифр. Если смысл фрагмента невозможно восстановить — оставь его близко к оригиналу и укажи в замечаниях.\n- Удаляй все личные контакты: телефоны, e-mail, Telegram и ники, ссылки на личные профили. Номер телефона, который относится к описанию работы, а не к контактам кандидата, не удаляй.\n- Не меняй названия организаций, учебных заведений, должностей и квалификаций, если в них нет явной ошибки.\n- Не заполняй разделы, для которых в резюме нет сведений.";
   const cfg = {
     key: store.get('claude_key', ''),
     model: store.get('claude_model2', 'claude-haiku-5-5'),
-    rules: store.get('claude_rules', ''),
+    rules: store.get('claude_rules2', DEFAULT_RULES),
     auto: store.get('claude_auto', '1') === '1'
   };
   function renderAiState() {
@@ -36,7 +38,7 @@
     cfg.rules = $('aiRules').value;
     store.set('claude_key', cfg.key || null);
     store.set('claude_model2', cfg.model);
-    store.set('claude_rules', cfg.rules);
+    store.set('claude_rules2', cfg.rules);
     store.set('claude_auto', cfg.auto ? '1' : '0');
     $('settings').hidden = true;
     renderAiState();
@@ -259,6 +261,7 @@
   $('btnRaw').onclick = () => { showRaw = !showRaw; $('src').value = showRaw ? current.raw : current.text; renderPreview(); };
   $('btnSettings').onclick = openSettings;
   $('btnSaveSettings').onclick = saveSettings;
+  $('btnDefaultRules').onclick = () => { $('aiRules').value = DEFAULT_RULES; };
   $('btnForgetKey').onclick = () => { $('apiKey').value = ''; saveSettings(); };
   $('settings').onclick = e => { if (e.target === $('settings')) $('settings').hidden = true; };
   renderAiState();
