@@ -4,9 +4,9 @@
 
   const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
 
+  // Основная инструкция (не меняется — кэшируется на стороне Claude и стоит дешевле)
   function systemPrompt() {
-    const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-    return `Ты — редактор резюме в кадровой службе. Сегодня ${today}.
+    return `Ты — редактор резюме в кадровой службе. Сегодняшняя дата указана в сообщении с резюме.
 Тебе присылают резюме кандидата (текст из Word или txt; порядок строк может быть перепутан из-за вёрстки в колонки).
 Твоя задача — разложить сведения по блокам единого шаблона и вызвать инструмент save_resume.
 Пометки вида «[НЕ ЗАПОЛНЕНО: …]» и «[даты не указаны]» — служебные, это не данные кандидата: игнорируй их.
@@ -85,7 +85,12 @@
   };
 
   // Запрос к Claude
-  async function process(text, apiKey, model) {
+  async function process(text, apiKey, model, customRules) {
+    const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    const system = [{ type: 'text', text: systemPrompt(), cache_control: { type: 'ephemeral' } }];
+    if (customRules && customRules.trim()) {
+      system.push({ type: 'text', text: 'ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА РЕКРУТЕРА — обязательно выполняй их (но правило «ничего не выдумывай» всегда главнее):\n' + customRules.trim() });
+    }
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -96,11 +101,11 @@
       },
       body: JSON.stringify({
         model,
-        max_tokens: 8000,
-        system: systemPrompt(),
+        max_tokens: 6000,
+        system,
         tools: [TOOL],
         tool_choice: { type: 'tool', name: 'save_resume' },
-        messages: [{ role: 'user', content: 'Резюме кандидата:\n\n' + text }]
+        messages: [{ role: 'user', content: 'Сегодня ' + today + '\n\nРезюме кандидата:\n\n' + text }]
       })
     });
     const data = await res.json().catch(() => ({}));

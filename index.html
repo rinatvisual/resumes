@@ -31,11 +31,15 @@
     <p class="muted">Ключ хранится только в этом браузере на этом компьютере и никуда, кроме Claude, не отправляется.</p>
     <label>Модель
       <select id="aiModel">
-        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 — оптимально</option>
-        <option value="claude-opus-5-5">Claude Opus 5.5 — точнее, дороже</option>
-        <option value="claude-haiku-5-5">Claude Haiku 5.5 — быстрее, дешевле</option>
+        <option value="claude-haiku-5-5">Claude Haiku 5.5 — экономно (по умолчанию)</option>
+        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 — точнее, дороже</option>
+        <option value="claude-opus-5-5">Claude Opus 5.5 — максимально точно, дорого</option>
       </select>
     </label>
+    <label>Мои правила редактуры
+      <textarea id="aiRules" rows="7" placeholder="Каждое правило с новой строки, своими словами. Например:&#10;- блок «О себе» сокращай до 3–4 предложений&#10;- не больше 7 обязанностей на одно место работы&#10;- работу дольше 10 лет назад не указывай&#10;- «Отдел» всегда: Управление HR"></textarea>
+    </label>
+    <p class="muted">Эти правила Claude применяет к каждому резюме вдобавок к основной инструкции.</p>
     <label class="check"><input id="aiAuto" type="checkbox" checked> Обрабатывать через Claude сразу при загрузке</label>
     <div class="settings-actions">
       <button id="btnForgetKey" class="btn ghost">Удалить ключ</button>

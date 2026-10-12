@@ -12,7 +12,8 @@
   };
   const cfg = {
     key: store.get('claude_key', ''),
-    model: store.get('claude_model', 'claude-sonnet-5-5'),
+    model: store.get('claude_model2', 'claude-haiku-5-5'),
+    rules: store.get('claude_rules', ''),
     auto: store.get('claude_auto', '1') === '1'
   };
   function renderAiState() {
@@ -24,6 +25,7 @@
     $('apiKey').value = cfg.key;
     $('aiModel').value = cfg.model;
     $('aiAuto').checked = cfg.auto;
+    $('aiRules').value = cfg.rules;
     $('settings').hidden = false;
     $('apiKey').focus();
   }
@@ -31,8 +33,10 @@
     cfg.key = $('apiKey').value.trim();
     cfg.model = $('aiModel').value;
     cfg.auto = $('aiAuto').checked;
+    cfg.rules = $('aiRules').value;
     store.set('claude_key', cfg.key || null);
-    store.set('claude_model', cfg.model);
+    store.set('claude_model2', cfg.model);
+    store.set('claude_rules', cfg.rules);
     store.set('claude_auto', cfg.auto ? '1' : '0');
     $('settings').hidden = true;
     renderAiState();
@@ -44,10 +48,10 @@
     it.ai = { state: 'busy' };
     refresh(it);
     try {
-      const { data } = await ResumeAI.process(it.raw, cfg.key, cfg.model);
+      const { data, usage } = await ResumeAI.process(it.raw, cfg.key, cfg.model, cfg.rules);
       it.text = ResumeAI.toCanonicalText(data);
       it.model = Resume.parse(it.text);
-      it.ai = { state: 'done', warnings: data.warnings || [] };
+      it.ai = { state: 'done', warnings: data.warnings || [], usage };
     } catch (e) {
       const net = e instanceof TypeError;
       it.ai = { state: 'error', error: net ? 'Не удалось связаться с Claude API (нет связи или запрос заблокирован): ' + e.message : e.message };
@@ -175,11 +179,16 @@
     $('paper').innerHTML = h;
 
     const note = $('aiNote'), ai = current.ai;
-    note.hidden = ai.state === 'none' || (ai.state === 'done' && !ai.warnings.length);
+    note.hidden = ai.state === 'none';
     note.className = 'ai-note' + (ai.state === 'error' ? ' err' : ai.state === 'busy' ? ' busy' : '');
     if (ai.state === 'busy') note.textContent = 'Claude обрабатывает резюме… Обычно это занимает 10–40 секунд.';
     else if (ai.state === 'error') note.textContent = ai.error;
-    else if (ai.state === 'done') note.innerHTML = '<b>Claude просит проверить:</b><ul>' + ai.warnings.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
+    else if (ai.state === 'done') {
+      const u = ai.usage || {};
+      const tok = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+      note.innerHTML = (ai.warnings.length ? '<b>Claude просит проверить:</b><ul>' + ai.warnings.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '✓ Claude обработал резюме, замечаний нет.') +
+        '<div class="tokens">Токены: ' + tok + ' на входе (из них из кэша ' + (u.cache_read_input_tokens || 0) + '), ' + (u.output_tokens || 0) + ' на выходе</div>';
+    }
     $('btnAI').disabled = ai.state === 'busy';
     $('btnAI').textContent = ai.state === 'done' ? 'Обработать заново' : 'Обработать через Claude';
     $('btnRaw').hidden = current.raw === current.text;
