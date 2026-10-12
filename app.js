@@ -58,7 +58,7 @@
       const { data, usage } = await ResumeAI.process(it.raw, cfg.key, cfg.model, cfg.rules);
       it.text = ResumeAI.toCanonicalText(data);
       it.model = Resume.parse(it.text);
-      it.ai = { state: 'done', warnings: data.warnings || [], usage };
+      it.ai = { state: 'done', warnings: data.warnings || [], eduHints: data.about_education || [], usage };
     } catch (e) {
       it.ai = { state: 'error', error: e instanceof TypeError ? await diagnose() : e.message };
     }
@@ -203,7 +203,8 @@
     else if (ai.state === 'done') {
       const u = ai.usage || {};
       const tok = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-      note.innerHTML = (ai.warnings.length ? '<b>Claude просит проверить:</b><ul>' + ai.warnings.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '✓ Claude обработал резюме, замечаний нет.') +
+      note.innerHTML = (ai.eduHints && ai.eduHints.length ? '<div class="edu-hint"><b>В «О себе» найдено образование — добавьте в «Образование» или «Доп. образование»:</b><ul>' +
+        ai.eduHints.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') + (ai.warnings.length ? '<b>Claude просит проверить:</b><ul>' + ai.warnings.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '✓ Claude обработал резюме, замечаний нет.') +
         '<div class="tokens">Токены: ' + tok + ' на входе (из них из кэша ' + (u.cache_read_input_tokens || 0) + '), ' + (u.output_tokens || 0) + ' на выходе</div>';
     }
     $('btnAI').disabled = ai.state === 'busy';
