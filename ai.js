@@ -24,10 +24,10 @@
 - city: регион и город проживания как в резюме, например «РТ, г. Заинск».
 - jobs: каждое место работы отдельно. Переводы внутри одной компании без перерыва — одно место работы; position — последняя должность; карьерный рост одной фразой в achievements (например «Вырос с оператора склада до менеджера ГУТЗ»), если он был.
   Даты — месяц (1–12) и год. Работает до сих пор — current: true. Если указан только год — month: null.
-  company: организационная форма + название в «ёлочках»: ООО «Агроторг», АО «Тандер», Бизнес-отель «Татарстан». Если места работы нет — null.
+  company: ВСЕГДА с организационно-правовой формой: ПАО/АО/ООО/ИП/Самозанятость + название в «ёлочках»: ООО «Агроторг», АО «Эссен Продакшн». Государственные и муниципальные учреждения — полным названием, как указано. Если форму ты достоверно знаешь — укажи её. Если не знаешь (кофейня, салон, магазин, бренд) — НЕ угадывай: оставь название как у кандидата («Кофейня «Sevendays»»), его уточнят поиском. Самозанятость — только если кандидат сам так написал. Если места работы нет — null.
   position: с заглавной буквы, без названия компании. Если должность не выделена отдельно, но в строке перечислены профессии («Бровист, мастер по наращиванию ресниц, фотограф») или вид работы («Учебная и производственная практика») — это position, а не обязанность.
   duties: пункты в виде существительных («Инвентаризация склада», «Внесение изменений в систему NEXUS»), каждый с большой буквы, без знаков препинания в конце. Исправь опечатки и согласование, смысл не меняй. Перечисление через запятую раздели на отдельные пункты.
-  ОБЯЗАТЕЛЬНО МИНИМУМ 6 ОБЯЗАННОСТЕЙ на каждое место работы, где указана хотя бы одна. Если указано от 1 до 5 — доведи до 6 детализацией: разложи указанные обязанности на составные действия, которые они обычно включают для этой должности (например, «Инвентаризация склада» → «Подготовка склада к инвентаризации», «Пересчёт товарных остатков», «Сверка фактического наличия с данными учёта»). Это детализация, а не выдумка. Нельзя добавлять новые направления работы, цифры, программы, оборудование и достижения. Если обязанностей нет совсем — оставь список пустым.
+  ОБЯЗАТЕЛЬНО МИНИМУМ 6 ОБЯЗАННОСТЕЙ, если кандидат указал от 2 до 5 — доведи до 6 детализацией: разложи указанные обязанности на составные действия, которые они обычно включают для этой должности (например, «Инвентаризация склада» → «Подготовка склада к инвентаризации», «Пересчёт товарных остатков», «Сверка фактического наличия с данными учёта»). Это детализация, а не выдумка. Нельзя добавлять новые направления работы, цифры, программы, оборудование и достижения. Если обязанностей нет совсем — оставь список пустым. Если указана ровно одна — не расширяй количество, только распиши её подробнее при необходимости.
   КАЖДАЯ ОБЯЗАННОСТЬ — НЕ МЕНЕЕ 4 СЛОВ. Если пункт из 3 слов и меньше («Работа с клиентами»), распиши его, уточнив суть в рамках сказанного («Консультирование клиентов по ассортименту и услугам»).
   achievements: только то, что кандидат сам указал как результат/достижение, полными предложениями. Нет — пустой список.
 - software: по одной программе (или группе) в строке: «Microsoft Excel - уверенный пользователь». Уровень пиши только если он указан. Пакет Word/Excel/PowerPoint можно объединить: «Пакет программ MS Office (Word, Excel)».
@@ -43,7 +43,7 @@
 - warnings: телеграфным стилем, до 6 слов в пункте (например: «Агроторг: начало 20.08 или 20.06?», «Грядка: обяз. 2→6», «О себе: 3→6»). Только реальные противоречия, сомнительные места и отметки о расширении. Пустые блоки не перечисляй.
 
 ПЕРЕД ВЫЗОВОМ save_resume ПРОВЕРЬ СЕБЯ:
-1) у каждого места работы с обязанностями их не меньше 6, и в каждой не меньше 4 слов;
+1) где кандидат указал 2–5 обязанностей, их стало не меньше 6; в каждой обязанности не меньше 4 слов;
 2) профессии и виды работы стоят в position, а не в duties;
 3) в about один абзац, не меньше 6 предложений и ни слова об образовании и курсах;
 4) контакты убраны, город проживания сохранён в city;
@@ -123,7 +123,7 @@
   }
 
   // Запрос к Claude
-  async function process(text, apiKey, model, customRules, cacheTtl) {
+  async function process(text, apiKey, model, customRules, cacheTtl, useSearch) {
     const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
     const system = [{ type: 'text', text: systemPrompt() }];
     if (customRules && customRules.trim()) {
@@ -153,7 +153,81 @@
         d.warnings.push('Доработка не удалась — нажмите «Обработать заново»');
       }
     }
+
+    // Уточнение ООО/ИП через поиск в интернете — только для мест работы без организационной формы
+    if (useSearch) {
+      const idx = (d.jobs || []).map((j, i) => i).filter(i => String(d.jobs[i].company || '').trim() && !hasForm(d.jobs[i].company));
+      if (idx.length) {
+        try {
+          const lk = await lookupCompanies(d, idx, apiKey, model);
+          for (const k in lk.usage) if (typeof lk.usage[k] === 'number') usage[k] = (usage[k] || 0) + lk.usage[k];
+          usage.searches = (usage.searches || 0) + lk.searches;
+        } catch (e) {
+          d.warnings.push('Поиск ООО/ИП не удался: ' + e.message.slice(0, 80));
+        }
+      }
+    }
     return { data: d, usage };
+  }
+
+  // Есть ли у названия организационно-правовая форма
+  const FORM_RE = /^(?:ПАО|НПАО|АО|ЗАО|ОАО|НАО|ООО|ИП|ГУП|МУП|ФГУП|ФГБУ|ФГАОУ|ФГБОУ|ГБУ|ГАУ|ГКУ|МБУ|МАУ|МКУ|МБОУ|МАОУ|МБДОУ|МАДОУ|ГБОУ|ГАОУ|ГАПОУ|ГБПОУ|АНО|Самозанят)/i;
+  const hasForm = name => FORM_RE.test(String(name).trim()) || /учреждени|муниципальн|государственн|федеральн|министерств|администрац|воинская часть/i.test(name);
+
+  const SET_COMPANIES = {
+    name: 'set_companies',
+    description: 'Вернуть уточнённые названия мест работы',
+    input_schema: {
+      type: 'object',
+      properties: {
+        companies: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { index: { type: 'integer' }, found: { type: 'boolean' }, company: { type: ['string', 'null'] } },
+            required: ['index', 'found']
+          }
+        }
+      },
+      required: ['companies']
+    }
+  };
+  const LOOKUP_PROMPT = `Ты уточняешь организационно-правовую форму мест работы из резюме по открытым данным (ЕГРЮЛ/ЕГРИП, rusprofile, list-org, checko, 2ГИС, сайты компаний).
+Для каждого места работы найди юрлицо или индивидуального предпринимателя, которому оно принадлежит, с учётом города кандидата.
+Формат: «ООО «Название»», «АО «Название»», «ПАО «Название»»; для ИП — «ИП Фамилия И. О.». Если вывеска отличается от юрлица — добавь её в скобках: «ИП Петрова А. С. (кофейня «Sevendays»)», «ООО «Альфа» (салон «Wedding Fashion RA»)».
+Не угадывай: если надёжно не нашёл — found: false. Не больше 2 поисков на одно место работы.
+В конце обязательно вызови set_companies.`;
+
+  async function lookupCompanies(d, idx, apiKey, model) {
+    const payload = { city: d.city || null, companies: idx.map(i => ({ index: i, name: d.jobs[i].company, position: d.jobs[i].position })) };
+    const messages = [{ role: 'user', content: JSON.stringify(payload) }];
+    const usage = {};
+    let searches = 0, result = null;
+    for (let step = 0; step < 4 && !result; step++) {
+      const data = await callRaw(apiKey, {
+        model, max_tokens: 2000, system: LOOKUP_PROMPT,
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: Math.min(2 * idx.length, 6) }, SET_COMPANIES],
+        tool_choice: { type: 'auto' },
+        messages
+      });
+      for (const k in data.usage || {}) if (typeof data.usage[k] === 'number') usage[k] = (usage[k] || 0) + data.usage[k];
+      searches += ((data.usage || {}).server_tool_use || {}).web_search_requests || 0;
+      result = (data.content || []).find(b => b.type === 'tool_use' && b.name === 'set_companies');
+      if (result || data.stop_reason !== 'pause_turn') break;
+      messages.push({ role: 'assistant', content: data.content }); // поиск ещё идёт — продолжаем
+    }
+    const list = (result && result.input && result.input.companies) || [];
+    idx.forEach(i => {
+      const r = list.find(x => x.index === i);
+      const short = String(d.jobs[i].company).replace(/^[^«"]*[«"]|[»"]+$/g, '').trim() || d.jobs[i].company;
+      if (r && r.found && r.company && hasForm(r.company)) {
+        d.jobs[i].company = r.company.trim();
+        d.warnings.push(short + ': найдено по поиску');
+      } else {
+        d.warnings.push(short + ': форма не найдена');
+      }
+    });
+    return { usage, searches };
   }
 
   // Сколько предложений в тексте
@@ -164,7 +238,7 @@
     const jobs = [];
     (d.jobs || []).forEach((j, i) => {
       const du = (j.duties || []).filter(x => String(x || '').trim());
-      if (du.length && (du.length < 6 || du.some(x => words(x) <= 3) || !String(j.position || '').trim())) jobs.push(i);
+      if (du.length && ((du.length >= 2 && du.length < 6) || du.some(x => words(x) <= 3) || !String(j.position || '').trim())) jobs.push(i);
     });
     const about = (d.about || []).join(' ').trim();
     return { jobs, about: !!about && (sentences(about) < 6 || /\n/.test(about)) };
@@ -176,14 +250,14 @@
     input_schema: {
       type: 'object',
       properties: {
-        jobs: { type: 'array', items: { type: 'object', properties: { index: { type: 'integer' }, position: { type: ['string', 'null'] }, duties: { type: 'array', items: { type: 'string' }, minItems: 6 } }, required: ['index', 'duties'] } },
+        jobs: { type: 'array', items: { type: 'object', properties: { index: { type: 'integer' }, position: { type: ['string', 'null'] }, duties: { type: 'array', items: { type: 'string' } } }, required: ['index', 'duties'] } },
         about: { type: ['string', 'null'] }
       },
       required: ['jobs']
     }
   };
   const FIX_PROMPT = `Ты дорабатываешь резюме кандидата. Ничего не выдумывай сверх детализации.
-Обязанности: для каждого места работы из запроса верни НЕ МЕНЬШЕ 6 пунктов, каждый НЕ МЕНЬШЕ 4 слов. Сохрани смысл исходных пунктов; недостающие получи детализацией указанных обязанностей на составные действия, обычные для этой должности. Короткие пункты (3 слова и меньше) распиши подробнее. Нельзя добавлять новые направления работы, цифры, программы, оборудование, достижения. Пункты — существительные с большой буквы, без знаков препинания в конце.
+Обязанности: для каждого места работы из запроса верни НЕ МЕНЬШЕ 6 пунктов (если исходно был всего 1 пункт — количество не увеличивай), каждый НЕ МЕНЬШЕ 4 слов. Сохрани смысл исходных пунктов; недостающие получи детализацией указанных обязанностей на составные действия, обычные для этой должности. Короткие пункты (3 слова и меньше) распиши подробнее. Нельзя добавлять новые направления работы, цифры, программы, оборудование, достижения. Пункты — существительные с большой буквы, без знаков препинания в конце.
 Если position пустая, а среди обязанностей есть перечень профессий или название должности — убери его из обязанностей и верни в position.
 «О себе» (если передано): один сплошной абзац, НЕ МЕНЬШЕ 6 предложений, каждое с точкой. Раскрой сказанное кандидатом, опираясь на его опыт работы. Без образования и курсов. Новых фактов (хобби, награды, качества, не следующие из сказанного) не добавляй.
 Верни результат через fix_resume.`;
@@ -216,8 +290,16 @@
     return r;
   }
 
-  // Один запрос к Claude API с понятными ошибками
+  // Запрос к Claude, ответ — блок инструмента
   async function call(apiKey, body) {
+    const data = await callRaw(apiKey, body);
+    const block = (data.content || []).find(b => b.type === 'tool_use');
+    if (!block) throw new Error('Claude не вернул данные резюме');
+    return { input: block.input, usage: data.usage || {} };
+  }
+
+  // Один запрос к Claude API с понятными ошибками
+  async function callRaw(apiKey, body) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -236,9 +318,7 @@
       if (res.status === 429) throw new Error('Слишком много запросов — подождите минуту (' + msg + ')');
       throw new Error('Ошибка Claude API ' + res.status + ': ' + msg);
     }
-    const block = (data.content || []).find(b => b.type === 'tool_use');
-    if (!block) throw new Error('Claude не вернул данные резюме');
-    return { input: block.input, usage: data.usage || {} };
+    return data;
   }
 
   // ---------- Перевод ответа Claude в текст «канонического» вида ----------

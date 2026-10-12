@@ -51,7 +51,8 @@
       const y = b.y - a.y;
       return y > 0 ? y + ' ' + plural(y, 'год', 'года', 'лет') : '';
     }
-    let months = (b.y - a.y) * 12 + ((b.m ?? 0) - (a.m ?? 0));
+    // считаем включительно, как в памятке: январь–апрель = 4 месяца
+    let months = (b.y - a.y) * 12 + (b.m - a.m) + 1;
     if (months < 1) months = 1;
     const y = Math.floor(months / 12), mo = months % 12, out = [];
     if (y) out.push(y + ' ' + plural(y, 'год', 'года', 'лет'));
@@ -68,7 +69,8 @@
     const now0 = new Date();
     const b = now ? { m: now0.getMonth(), y: now0.getFullYear() } : parsePoint(m[2]);
     let dur = m[3] ? m[3].replace(/^\(\s*|\s*\)$/g, '') : (nextDuration || duration(a, b));
-    const text = fmtPoint(a, true) + ' - ' + (now ? 'по настоящее время' : fmtPoint(b, false)) + (dur ? ' (' + dur + ')' : '');
+    const single = !now && b && a.y === b.y && a.m === b.m && a.m != null;  // «Сентябрь 2025 (1 месяц)»
+    const text = fmtPoint(a, true) + (single ? '' : ' - ' + (now ? 'по настоящее время' : fmtPoint(b, false))) + (dur ? ' (' + dur + ')' : '');
     return { text, rest: clean(m[4] || '') };
   }
   const isDateLine = s => DATE_LINE.test(clean(s));
@@ -235,6 +237,7 @@
       j.company = dash(j.head[0]);
       j.position = dash(j.head[1]);
       j.duties = normalizeDuties(j.duties);
+      j.ach = j.ach.map(a => /[.!?…]$/.test(a) ? a : a + '.');
       delete j.head; delete j.mode;
     }
     return jobs;

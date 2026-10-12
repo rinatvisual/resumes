@@ -17,7 +17,8 @@
     model: store.get('claude_model2', 'claude-haiku-5-5'),
     rules: store.get('claude_rules2', DEFAULT_RULES),
     auto: store.get('claude_auto', '1') === '1',
-    ttl: store.get('claude_ttl', '1h')
+    ttl: store.get('claude_ttl', '1h'),
+    search: store.get('claude_search', '1') === '1'
   };
   function renderAiState() {
     const el = $('aiState');
@@ -30,6 +31,7 @@
     $('aiAuto').checked = cfg.auto;
     $('aiRules').value = cfg.rules;
     $('aiTtl').value = cfg.ttl;
+    $('aiSearch').checked = cfg.search;
     $('settings').hidden = false;
     $('apiKey').focus();
   }
@@ -44,6 +46,8 @@
     cfg.auto = $('aiAuto').checked;
     cfg.rules = $('aiRules').value;
     cfg.ttl = $('aiTtl').value;
+    cfg.search = $('aiSearch').checked;
+    store.set('claude_search', cfg.search ? '1' : '0');
     store.set('claude_ttl', cfg.ttl);
     store.set('claude_key', cfg.key || null);
     store.set('claude_model2', cfg.model);
@@ -59,7 +63,7 @@
     it.ai = { state: 'busy' };
     refresh(it);
     try {
-      const { data, usage } = await ResumeAI.process(it.raw, cfg.key, cfg.model, cfg.rules, cfg.ttl);
+      const { data, usage } = await ResumeAI.process(it.raw, cfg.key, cfg.model, cfg.rules, cfg.ttl, cfg.search);
       it.text = ResumeAI.toCanonicalText(data);
       it.model = Resume.parse(it.text);
       it.ai = { state: 'done', warnings: data.warnings || [], eduHints: data.about_education || [], usage };
@@ -216,7 +220,8 @@
         ai.eduHints.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') + (ai.warnings.length ? '<b>Claude просит проверить:</b><ul>' + ai.warnings.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '✓ Claude обработал резюме, замечаний нет.') +
         '<div class="tokens">Токены — вход: ' + fresh + ' обычных, ' + read + ' из кэша, ' + wrote + ' записано в кэш; выход: ' + (u.output_tokens || 0) +
         (read ? ' · кэш сработал' : wrote ? ' · кэш создан, со следующего резюме будет дешевле' : '') +
-        (u.repaired ? ' · была доработка (обязанности / «О себе»)' : '') + '</div>';
+        (u.repaired ? ' · была доработка (обязанности / «О себе»)' : '') +
+        (u.searches ? ' · поисков ООО/ИП: ' + u.searches : '') + '</div>';
     }
     $('btnAI').disabled = ai.state === 'busy';
     $('btnAI').textContent = ai.state === 'done' ? 'Обработать заново' : 'Обработать через Claude';
