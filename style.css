@@ -4,6 +4,7 @@
   --brand: #2c4f8f; --brand-ink: #fff; --red: #c00000; --red-bg: #ffd9d9; --ok: #1d7a46; --ok-bg: #dff3e7;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
 button { font: inherit; }
 
@@ -69,3 +70,23 @@ button { font: inherit; }
   .paper { padding: 22px 18px 22px 26px; border-left-width: 8px; }
   .paper .headblock { margin-left: 0; }
 }
+
+/* Claude */
+.top-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ai-state { font-size: 12px; color: var(--muted); }
+.ai-state.on { color: var(--ok); }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+.pane-actions { display: flex; gap: 6px; }
+.settings { position: fixed; inset: 0; background: #0006; display: grid; place-items: center; z-index: 10; padding: 16px; }
+.settings-box { background: var(--panel); border-radius: 12px; padding: 20px 22px; width: min(460px, 100%); display: flex; flex-direction: column; gap: 10px; }
+.settings-box h2 { margin: 0 0 4px; font-size: 17px; }
+.settings-box label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 13px; }
+.settings-box label.check { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; }
+.settings-box input[type=password], .settings-box select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.settings-box .muted { margin: 0; }
+.settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.ai-note { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); background: #fff8e1; color: #7a5200; }
+.ai-note.err { background: #fff3f3; color: var(--red); }
+.ai-note.busy { background: #eef3fc; color: var(--brand); }
+.ai-note ul { margin: 4px 0 0; padding-left: 18px; }
+.list .ai { font-size: 11px; color: var(--brand); }

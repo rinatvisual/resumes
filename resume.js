@@ -50,6 +50,10 @@
   };
 
   function duration(a, b) {
+    if (a.m == null || b.m == null) {
+      const y = b.y - a.y;
+      return y > 0 ? y + ' ' + plural(y, 'год', 'года', 'лет') : '';
+    }
     let months = (b.y - a.y) * 12 + ((b.m ?? 0) - (a.m ?? 0));
     if (months < 1) months = 1;
     const y = Math.floor(months / 12), mo = months % 12, out = [];
@@ -67,7 +71,7 @@
     const now0 = new Date();
     const b = now ? { m: now0.getMonth(), y: now0.getFullYear() } : parsePoint(m[2]);
     let dur = m[3] ? m[3].replace(/^\(\s*|\s*\)$/g, '') : (nextDuration || duration(a, b));
-    const text = fmtPoint(a, true) + ' - ' + (now ? 'по настоящее время' : fmtPoint(b, false)) + ' (' + dur + ')';
+    const text = fmtPoint(a, true) + ' - ' + (now ? 'по настоящее время' : fmtPoint(b, false)) + (dur ? ' (' + dur + ')' : '');
     return { text, rest: clean(m[4] || '') };
   }
   const isDateLine = s => DATE_LINE.test(clean(s));
@@ -135,6 +139,7 @@
     model.age = ageIdx >= 0 ? head[ageIdx].replace(/^возраст\s*:?\s*/i, '') : '';
     const rest = head.filter((_, i) => i !== ageIdx);
     model.name = rest.length ? rest.shift().replace(/^ф\.?\s*и\.?\s*о\.?\s*:?\s*/i, '') : '';
+    if (/^[—-]$/.test(model.name)) model.name = '';
     model.headExtra = rest;
 
     model.otdel = nonEmpty(sec.otdel).join(' ');
@@ -188,6 +193,7 @@
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!line) continue;
+      if (/^\[даты не указаны\]$/i.test(line)) { newJob(''); continue; }
       if (isDateLine(line)) {
         let dur = null;
         const nxt = lines.slice(i + 1).find(Boolean);
@@ -211,8 +217,9 @@
       (job.mode === 'ach' ? job.ach : job.duties).push(line);
     }
     for (const j of jobs) {
-      j.company = j.head[0] || '';
-      j.position = j.head[1] || '';
+      const dash = x => (!x || /^[—-]$/.test(x) ? '' : x);
+      j.company = dash(j.head[0]);
+      j.position = dash(j.head[1]);
       j.duties = normalizeDuties(j.duties);
       delete j.head; delete j.mode;
     }

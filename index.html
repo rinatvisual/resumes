@@ -16,9 +16,33 @@
     </div>
   </div>
   <div class="top-actions">
+    <span id="aiState" class="ai-state"></span>
+    <button id="btnSettings" class="btn ghost">Настройки Claude</button>
     <button id="btnZip" class="btn ghost" disabled>Скачать все (.zip)</button>
   </div>
 </header>
+
+<div id="settings" class="settings" hidden>
+  <div class="settings-box">
+    <h2>Подключение к Claude</h2>
+    <label>Ключ API
+      <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off">
+    </label>
+    <p class="muted">Ключ хранится только в этом браузере на этом компьютере и никуда, кроме Claude, не отправляется.</p>
+    <label>Модель
+      <select id="aiModel">
+        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 — оптимально</option>
+        <option value="claude-opus-5-5">Claude Opus 5.5 — точнее, дороже</option>
+        <option value="claude-haiku-5-5">Claude Haiku 5.5 — быстрее, дешевле</option>
+      </select>
+    </label>
+    <label class="check"><input id="aiAuto" type="checkbox" checked> Обрабатывать через Claude сразу при загрузке</label>
+    <div class="settings-actions">
+      <button id="btnForgetKey" class="btn ghost">Удалить ключ</button>
+      <button id="btnSaveSettings" class="btn">Сохранить</button>
+    </div>
+  </div>
+</div>
 
 <main class="layout">
   <aside class="side">
@@ -34,8 +58,11 @@
   <section class="work" id="work" hidden>
     <div class="pane">
       <div class="pane-head">
-        <h2>Исходный текст</h2>
-        <span class="hint">Можно править — предпросмотр обновится</span>
+        <h2>Текст</h2>
+        <span class="pane-actions">
+          <button id="btnRaw" class="btn ghost small" hidden>Показать оригинал</button>
+          <button id="btnAI" class="btn small">Обработать через Claude</button>
+        </span>
       </div>
       <textarea id="src" spellcheck="false" placeholder="Вставьте сюда текст резюме…"></textarea>
     </div>
@@ -44,6 +71,7 @@
         <h2>Результат</h2>
         <button id="btnDocx" class="btn">Скачать Word</button>
       </div>
+      <div id="aiNote" class="ai-note" hidden></div>
       <div id="status" class="status"></div>
       <div class="paper-wrap"><div id="paper" class="paper"></div></div>
     </div>
@@ -53,6 +81,7 @@
     <h2>Как пользоваться</h2>
     <ol>
       <li>Перетащите резюме (.docx или .txt) в рамку слева или вставьте текст вручную.</li>
+      <li>Если подключён Claude (кнопка «Настройки Claude» вверху), резюме само очистится от лишнего и разложится по блокам. Жёлтым он отметит то, что стоит перепроверить.</li>
       <li>Проверьте результат справа. Красным выделено то, чего нет в резюме.</li>
       <li>При необходимости поправьте исходный текст — результат обновится сразу.</li>
       <li>Нажмите «Скачать Word».</li>
@@ -65,6 +94,7 @@
 <script src="lib/jszip.min.js"></script>
 <script src="template.js"></script>
 <script src="resume.js"></script>
+<script src="ai.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

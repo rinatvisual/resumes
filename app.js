@@ -2,8 +2,62 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const items = [];          // { id, file, text, model }
-  let current = null, seq = 0, timer = null;
+  const items = [];          // { id, file, raw, text, model, ai }
+  let current = null, seq = 0, timer = null, showRaw = false;
+
+  // ---------- Настройки Claude (хранятся только в этом браузере) ----------
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+    set(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) { /* без сохранения */ } }
+  };
+  const cfg = {
+    key: store.get('claude_key', ''),
+    model: store.get('claude_model', 'claude-sonnet-5-5'),
+    auto: store.get('claude_auto', '1') === '1'
+  };
+  function renderAiState() {
+    const el = $('aiState');
+    el.textContent = cfg.key ? '● Claude подключён' : '○ Claude не подключён';
+    el.className = 'ai-state' + (cfg.key ? ' on' : '');
+  }
+  function openSettings() {
+    $('apiKey').value = cfg.key;
+    $('aiModel').value = cfg.model;
+    $('aiAuto').checked = cfg.auto;
+    $('settings').hidden = false;
+    $('apiKey').focus();
+  }
+  function saveSettings() {
+    cfg.key = $('apiKey').value.trim();
+    cfg.model = $('aiModel').value;
+    cfg.auto = $('aiAuto').checked;
+    store.set('claude_key', cfg.key || null);
+    store.set('claude_model', cfg.model);
+    store.set('claude_auto', cfg.auto ? '1' : '0');
+    $('settings').hidden = true;
+    renderAiState();
+  }
+
+  // ---------- Обработка через Claude ----------
+  async function runAI(it) {
+    if (!cfg.key) { openSettings(); return; }
+    it.ai = { state: 'busy' };
+    refresh(it);
+    try {
+      const { data } = await ResumeAI.process(it.raw, cfg.key, cfg.model);
+      it.text = ResumeAI.toCanonicalText(data);
+      it.model = Resume.parse(it.text);
+      it.ai = { state: 'done', warnings: data.warnings || [] };
+    } catch (e) {
+      const net = e instanceof TypeError;
+      it.ai = { state: 'error', error: net ? 'Не удалось связаться с Claude API (нет связи или запрос заблокирован): ' + e.message : e.message };
+    }
+    refresh(it);
+  }
+  function refresh(it) {
+    if (it === current) { if (!showRaw) $('src').value = it.text; renderPreview(); }
+    renderList();
+  }
 
   // ---------- Загрузка файлов ----------
   async function readFile(file) {
@@ -19,16 +73,29 @@
     let last = null;
     for (const f of files) {
       try {
-        last = addItem(f.name, await readFile(f));
+        const it = addItem(f.name, await readFile(f));
+        if (cfg.key && cfg.auto) queue.push(it);
+        last = it;
       } catch (e) {
         alert(f.name + ':\n' + e.message);
       }
     }
     if (last) select(last);
+    drainQueue();
+  }
+
+  // резюме обрабатываются по очереди, чтобы не упереться в лимиты API
+  const queue = [];
+  let draining = false;
+  async function drainQueue() {
+    if (draining) return;
+    draining = true;
+    while (queue.length) await runAI(queue.shift());
+    draining = false;
   }
 
   function addItem(fileName, text) {
-    const it = { id: ++seq, file: fileName, text, model: Resume.parse(text) };
+    const it = { id: ++seq, file: fileName, raw: text, text, model: Resume.parse(text), ai: { state: 'none' } };
     items.push(it);
     return it;
   }
@@ -44,7 +111,7 @@
       li.innerHTML = '<span class="nm"></span><span class="fn"></span><span class="x"><span class="badge ' + (n ? 'bad' : 'good') + '">' +
         (n ? 'нет ' + n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'блока' : 'блоков') : '✓') + '</span><button class="del" title="Убрать">×</button></span>';
       li.querySelector('.nm').textContent = it.model.name || 'Без имени';
-      li.querySelector('.fn').textContent = it.file;
+      li.querySelector('.fn').textContent = it.file + (it.ai.state === 'busy' ? ' · Claude обрабатывает…' : it.ai.state === 'done' ? ' · обработано Claude' : it.ai.state === 'error' ? ' · ошибка Claude' : '');
       li.onclick = () => select(it);
       li.querySelector('.del').onclick = e => { e.stopPropagation(); remove(it); };
       ul.appendChild(li);
@@ -56,6 +123,7 @@
     current = it;
     $('work').hidden = !it;
     $('empty').hidden = !!it;
+    showRaw = false;
     if (it) { $('src').value = it.text; renderPreview(); }
     renderList();
   }
@@ -105,6 +173,18 @@
     const line = (label, v, ml) => '<p>' + (v ? esc(label) + esc(v) : '<span class="miss">' + esc(label) + '[НЕ ЗАПОЛНЕНО: ' + ml + ']</span>') + '</p>';
     h += GAP + GAP + line('Ожидания по зарплате: ', m.salary, 'зарплата') + GAP + line('Уровень в котах: ', m.cats, 'уровень');
     $('paper').innerHTML = h;
+
+    const note = $('aiNote'), ai = current.ai;
+    note.hidden = ai.state === 'none' || (ai.state === 'done' && !ai.warnings.length);
+    note.className = 'ai-note' + (ai.state === 'error' ? ' err' : ai.state === 'busy' ? ' busy' : '');
+    if (ai.state === 'busy') note.textContent = 'Claude обрабатывает резюме… Обычно это занимает 10–40 секунд.';
+    else if (ai.state === 'error') note.textContent = ai.error;
+    else if (ai.state === 'done') note.innerHTML = '<b>Claude просит проверить:</b><ul>' + ai.warnings.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
+    $('btnAI').disabled = ai.state === 'busy';
+    $('btnAI').textContent = ai.state === 'done' ? 'Обработать заново' : 'Обработать через Claude';
+    $('btnRaw').hidden = current.raw === current.text;
+    $('btnRaw').textContent = showRaw ? 'Вернуться к результату' : 'Показать оригинал';
+    $('src').readOnly = showRaw;
 
     const st = $('status');
     if (m.missing.length) {
@@ -157,12 +237,21 @@
   $('src').addEventListener('input', () => {
     clearTimeout(timer);
     timer = setTimeout(() => {
+      if (showRaw) return;
       current.text = $('src').value;
+      if (current.ai.state === 'none') current.raw = current.text;
       current.model = Resume.parse(current.text);
       renderPreview();
       renderList();
     }, 250);
   });
   $('btnDocx').onclick = downloadCurrent;
+  $('btnAI').onclick = () => current && runAI(current);
+  $('btnRaw').onclick = () => { showRaw = !showRaw; $('src').value = showRaw ? current.raw : current.text; renderPreview(); };
+  $('btnSettings').onclick = openSettings;
+  $('btnSaveSettings').onclick = saveSettings;
+  $('btnForgetKey').onclick = () => { $('apiKey').value = ''; saveSettings(); };
+  $('settings').onclick = e => { if (e.target === $('settings')) $('settings').hidden = true; };
+  renderAiState();
   $('btnZip').onclick = downloadAll;
 })();
