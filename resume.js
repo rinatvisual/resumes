@@ -25,11 +25,8 @@
     return many;
   }
 
-  // Первая буква пункта в нижний регистр (кроме аббревиатур: ЭДО, MS Office)
-  function lowerFirst(s) {
-    if (s.length > 1 && /[А-ЯЁ]/.test(s[0]) && /[а-яё]/.test(s[1])) return s[0].toLowerCase() + s.slice(1);
-    return s;
-  }
+  // Первая буква пункта обязанностей — заглавная
+  const upperFirst = s => s ? s[0].toUpperCase() + s.slice(1) : s;
 
   // ---------- Даты в опыте работы ----------
   function parsePoint(p) {
@@ -239,7 +236,7 @@
       t = t.replace(/[\s;,]+$/, '');
       if (!ABBR.test(t)) t = t.replace(/[.\s]+$/, '');
       const last = i === all.length - 1;
-      return '- ' + lowerFirst(t) + (last ? (/\.$/.test(t) ? '' : '.') : ';');
+      return '- ' + upperFirst(t) + (last ? (/\.$/.test(t) ? '' : '.') : ';');
     });
   }
 
