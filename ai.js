@@ -145,9 +145,13 @@
     // Проверка ответа: если Haiku не довёл обязанности или «О себе» до нормы — короткий запрос-доработка
     const need = checkRules(d);
     if (need.jobs.length || need.about) {
-      const fix = await repair(d, need, apiKey, model);
-      for (const k in fix.usage) if (typeof fix.usage[k] === 'number') usage[k] = (usage[k] || 0) + fix.usage[k];
-      usage.repaired = true;
+      try {
+        const fix = await repair(d, need, apiKey, model);
+        for (const k in fix.usage) if (typeof fix.usage[k] === 'number') usage[k] = (usage[k] || 0) + fix.usage[k];
+        usage.repaired = true;
+      } catch (e) {
+        d.warnings.push('Доработка не удалась — нажмите «Обработать заново»');
+      }
     }
     return { data: d, usage };
   }
