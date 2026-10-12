@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Резюме по шаблону</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo">Р</span>
+    <div>
+      <h1>Резюме по шаблону</h1>
+      <p>Загрузите .docx или .txt — получите Word в едином оформлении. Пропущенные блоки отмечаются красным.</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button id="btnZip" class="btn ghost" disabled>Скачать все (.zip)</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="side">
+    <label id="drop" class="drop">
+      <input id="fileInput" type="file" accept=".docx,.txt,text/plain" multiple hidden>
+      <strong>Перетащите файлы сюда</strong>
+      <span>или нажмите, чтобы выбрать<br>.docx, .txt — можно несколько</span>
+    </label>
+    <button id="btnPaste" class="btn ghost wide">+ Вставить текст вручную</button>
+    <ul id="list" class="list"></ul>
+  </aside>
+
+  <section class="work" id="work" hidden>
+    <div class="pane">
+      <div class="pane-head">
+        <h2>Исходный текст</h2>
+        <span class="hint">Можно править — предпросмотр обновится</span>
+      </div>
+      <textarea id="src" spellcheck="false" placeholder="Вставьте сюда текст резюме…"></textarea>
+    </div>
+    <div class="pane">
+      <div class="pane-head">
+        <h2>Результат</h2>
+        <button id="btnDocx" class="btn">Скачать Word</button>
+      </div>
+      <div id="status" class="status"></div>
+      <div class="paper-wrap"><div id="paper" class="paper"></div></div>
+    </div>
+  </section>
+
+  <section class="empty" id="empty">
+    <h2>Как пользоваться</h2>
+    <ol>
+      <li>Перетащите резюме (.docx или .txt) в рамку слева или вставьте текст вручную.</li>
+      <li>Проверьте результат справа. Красным выделено то, чего нет в резюме.</li>
+      <li>При необходимости поправьте исходный текст — результат обновится сразу.</li>
+      <li>Нажмите «Скачать Word».</li>
+    </ol>
+    <p class="muted">Названия блоков в исходном тексте: «Отдел», «Опыт работы», «Владение ПО», «О себе», «Навыки», «Образование», «Доп. образование», «Знание языков», «Ожидания по зарплате», «Уровень в котах». Двоеточие после названия не обязательно.</p>
+    <p class="muted">Файлы никуда не отправляются — всё обрабатывается в вашем браузере.</p>
+  </section>
+</main>
+
+<script src="lib/jszip.min.js"></script>
+<script src="template.js"></script>
+<script src="resume.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
