@@ -85,6 +85,8 @@
     ['lang', /^(?:знание\s+(?:иностранных\s+)?языков.*|иностранные\s+языки|языки|владение\s+языками)$/],
     ['salary', /^(?:ожидания\s+по\s+(?:зарплате|заработной\s+плате)|(?:желаемая|ожидаемая)\s+(?:зарплата|заработная\s+плата)|зарплатные\s+ожидания|зарплата)$/],
     ['cats', /^уровень\s+в\s+котах$/],
+    ['city', /^(?:город(?:\s+проживания)?|место\s+проживания|регион\s+и\s+город|проживаю|проживание)$/],
+    ['contacts', /^(?:контактная\s+информация|контактные\s+данные|контакты)$/],
   ];
 
   function matchHeading(line) {
@@ -104,9 +106,22 @@
     ['license', /^(?:водительск|права(?![а-яё]))/i, 'Водительское удостоверение'],
   ];
 
+  // Убираем памятку шаблона («На что обратить внимание» + нумерованные правила) и подсказки в скобках
+  function stripGuide(text) {
+    const out = [];
+    let inGuide = false;
+    for (const raw of text.replace(/\r\n?/g, '\n').split('\n')) {
+      const t = raw.trim();
+      if (/^на что обратить внимание/i.test(t)) { inGuide = true; continue; }
+      if (inGuide) { if (!t || /^\d{1,2}\.\s/.test(t)) continue; inGuide = false; }
+      out.push(raw.replace(/\s*\((?:наименование|ваше представление)[^)]*\)/gi, ''));
+    }
+    return out.join('\n');
+  }
+
   // ---------- Разбор текста в модель ----------
   function parse(text) {
-    const lines = text.replace(/\r\n?/g, '\n').split('\n').map(clean);
+    const lines = stripGuide(text).split('\n').map(clean);
     const sec = { head: [] };
     const personal = {};
     let cur = 'head';
@@ -136,7 +151,7 @@
     model.age = ageIdx >= 0 ? head[ageIdx].replace(/^возраст\s*:?\s*/i, '') : '';
     const rest = head.filter((_, i) => i !== ageIdx);
     model.name = rest.length ? rest.shift().replace(/^ф\.?\s*и\.?\s*о\.?\s*:?\s*/i, '') : '';
-    if (/^[—-]$/.test(model.name)) model.name = '';
+    if (/^[—-]$|^\[не указано\]$/i.test(model.name)) model.name = '';
     model.headExtra = rest;
 
     model.otdel = nonEmpty(sec.otdel).join(' ');
@@ -150,6 +165,7 @@
     model.lang = nonEmpty(sec.lang).map(l => dashes(isBullet(l) ? stripBullet(l) : l).replace(/\s*[:–—]\s*(?=[A-CА-СВ]\d)/i, ' - '));
     model.salary = nonEmpty(sec.salary).join(' ').replace(/\d{4,}/g, d => d.replace(/\B(?=(\d{3})+(?!\d))/g, ' '));
     model.cats = nonEmpty(sec.cats).join(' ');
+    model.city = nonEmpty(sec.city).join(' ');  // блок «Контакты» не переносим — только город
     model.missing = findMissing(model);
     return model;
   }
@@ -208,13 +224,14 @@
       if (a) { job.mode = 'ach'; if (a[1]) job.ach.push(a[1]); continue; }
       if (/^(?:обязанности|функционал|должностные\s+обязанности)\s*:?\s*$/i.test(line)) { job.mode = 'duties'; continue; }
       if (job.mode === 'head') {
+        if (/^\[не указано\]$/i.test(line)) { job.head.push(''); continue; }
         if (isBullet(line) || job.head.length >= 2) job.mode = 'duties';
         else { job.head.push(line); continue; }
       }
       (job.mode === 'ach' ? job.ach : job.duties).push(line);
     }
     for (const j of jobs) {
-      const dash = x => (!x || /^[—-]$/.test(x) ? '' : x);
+      const dash = x => (!x || /^[—-]$|^\[не указано\]$/i.test(x) ? '' : x);
       j.company = dash(j.head[0]);
       j.position = dash(j.head[1]);
       j.duties = normalizeDuties(j.duties);
@@ -252,14 +269,15 @@
       if (!j.company) miss.push(n + ': компания');
       if (!j.position) miss.push(n + ': должность');
       if (!j.duties.length) miss.push(n + ': обязанности');
+      if (!j.ach.length) miss.push(n + ': достижения');
     });
     if (!m.soft.length) miss.push('Владение ПО');
     if (!m.about.length) miss.push('О себе');
     PERSONAL.forEach(([k, , label]) => { if (!m.personal[k]) miss.push(label); });
     if (!m.skills) miss.push('Навыки');
     if (!m.edu.length) miss.push('Образование');
-    if (!m.addEdu.length) miss.push('Доп. образование');
     if (!m.lang.length) miss.push('Знание языков');
+    if (!m.city) miss.push('Город проживания');
     if (!m.salary) miss.push('Ожидания по зарплате');
     if (!m.cats) miss.push('Уровень в котах');
     return miss;
@@ -283,21 +301,41 @@
   function cellFull(paras) {
     return '<w:tc><w:tcPr><w:tcW w:w="10358" w:type="dxa"/><w:gridSpan w:val="2"/><w:shd w:val="clear" w:color="auto" w:fill="auto"/>' + MAR + '</w:tcPr>' + (paras || p()) + '</w:tc>';
   }
-  function rowLR(h, leftMerge, rightParas) {
+  function rowLR(h, leftMerge, rightParas, leftParas) {
     return '<w:tr><w:trPr><w:trHeight w:val="' + h + '"/></w:trPr>' +
-      '<w:tc><w:tcPr><w:tcW w:w="3549" w:type="dxa"/><w:vMerge' + (leftMerge ? ' w:val="restart"' : '') + '/><w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>' + MAR + '</w:tcPr>' + p() + '</w:tc>' +
+      '<w:tc><w:tcPr><w:tcW w:w="3549" w:type="dxa"/><w:vMerge' + (leftMerge ? ' w:val="restart"' : '') + '/><w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>' + MAR + '</w:tcPr>' + (leftParas || p()) + '</w:tc>' +
       '<w:tc><w:tcPr><w:tcW w:w="6809" w:type="dxa"/><w:shd w:val="clear" w:color="auto" w:fill="auto"/>' + MAR + '</w:tcPr>' + rightParas + '</w:tc></w:tr>';
   }
   const rowFull = (h, paras) => '<w:tr><w:trPr><w:trHeight w:val="' + h + '"/></w:trPr>' + cellFull(paras) + '</w:tr>';
   const headingRow = (title, missing) => rowFull(300, p(r(title, { b: true, red: missing }), '<w:keepNext/>'));
 
-  function buildTableXml(m) {
+  // Фото в левой колонке шапки (размер как в эталоне — ширина 2000885 EMU)
+  const PHOTO_RID = 'rIdResumePhoto';
+  function photoSize(ph) {
+    let cx = 2000885, cy = Math.round(cx * (ph.cy || 1) / (ph.cx || 1));
+    if (cy > 2700000) { cx = Math.round(cx * 2700000 / cy); cy = 2700000; }
+    return { cx, cy };
+  }
+  function photoPara(ph) {
+    const { cx, cy } = photoSize(ph);
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main', PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+    return '<w:p><w:pPr><w:spacing w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      '<wp:extent cx="' + cx + '" cy="' + cy + '"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="1001" name="Фото"/>' +
+      '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="' + A + '" noChangeAspect="1"/></wp:cNvGraphicFramePr>' +
+      '<a:graphic xmlns:a="' + A + '"><a:graphicData uri="' + PIC + '"><pic:pic xmlns:pic="' + PIC + '">' +
+      '<pic:nvPicPr><pic:cNvPr id="0" name="photo"/><pic:cNvPicPr/></pic:nvPicPr>' +
+      '<pic:blipFill><a:blip r:embed="' + PHOTO_RID + '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+      '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
+      '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+  }
+
+  function buildTableXml(m, photo) {
     const rows = [];
     // Шапка
     let right = p(m.name ? r(m.name, { b: true }) : missRun('ФИО'));
     right += p(m.age ? r(m.age) : missRun('возраст'));
     m.headExtra.forEach(l => { right += p(r(l)); });
-    rows.push(rowLR(333, true, right));
+    rows.push(rowLR(333, true, right, photo ? photoPara(photo) : null));
     rows.push(rowLR(640, false, p(r('Отдел:', { b: true, red: !m.otdel })).replace('<w:spacing w:line="240"', '<w:spacing w:before="240" w:line="240"')));
     rows.push(rowLR(2245, false, p(m.otdel ? r(m.otdel) : missRun('отдел')) + p()));
 
@@ -312,10 +350,9 @@
       ex += p(j.position ? r(j.position, { b: true }) : missRun('должность'));
       if (j.duties.length) j.duties.forEach(d => { ex += p(r(d)); });
       else ex += p(missRun('обязанности'));
-      if (j.ach.length) {
-        ex += p(r('Достижения:', { b: true }));
-        j.ach.forEach(a => { ex += p(r(a)); });
-      }
+      ex += p(r('Достижения:', { b: true, red: !j.ach.length }));
+      if (j.ach.length) j.ach.forEach(a => { ex += p(r(a)); });
+      else ex += p(missRun('достижения'));
     });
     rows.push(rowFull(1244, ex));
 
@@ -336,8 +373,11 @@
     const grp = (g, label) => g.length ? g.map((lines, i) => (i ? p() : '') + lines.map(l => p(r(l))).join('')).join('') : p(missRun(label));
     rows.push(headingRow('Образование:', !m.edu.length));
     rows.push(rowFull(600, grp(m.edu, 'образование')));
-    rows.push(headingRow('Доп. образование:', !m.addEdu.length));
-    rows.push(rowFull(600, grp(m.addEdu, 'доп. образование')));
+    // «Доп. образование» убираем, если курсов нет (правило из памятки к шаблону)
+    if (m.addEdu.length) {
+      rows.push(headingRow('Доп. образование:', false));
+      rows.push(rowFull(600, grp(m.addEdu, 'доп. образование')));
+    }
 
     // Языки
     rows.push(headingRow('Знание языков и уровень владения:', !m.lang.length));
@@ -345,6 +385,7 @@
 
     // Зарплата и уровень
     rows.push(rowFull(993,
+      p() + p(r('Город проживания: ', { red: !m.city }) + (m.city ? r(m.city) : missRun('город'))) +
       p() + p(r('Ожидания по зарплате: ', { red: !m.salary }) + (m.salary ? r(m.salary) : missRun('зарплата'))) +
       p() + p(r('Уровень в котах: ', { red: !m.cats }) + (m.cats ? r(m.cats) : missRun('уровень')))));
 
@@ -354,10 +395,22 @@
   }
 
   // Готовый .docx (Blob/Uint8Array) из модели
-  async function buildDocx(model, templateB64, JSZipLib, type) {
+  async function buildDocx(model, templateB64, JSZipLib, type, photo) {
     const zip = await JSZipLib.loadAsync(templateB64, { base64: true });
     const xml = await zip.file('word/document.xml').async('string');
-    zip.file('word/document.xml', xml.replace('<!--RESUME_TABLE-->', buildTableXml(model)));
+    if (photo) {
+      // кладём фото в документ и регистрируем его
+      const name = 'media/resume_photo.' + photo.ext;
+      zip.file('word/' + name, photo.bytes);
+      const relsPath = 'word/_rels/document.xml.rels';
+      const rels = await zip.file(relsPath).async('string');
+      zip.file(relsPath, rels.replace('</Relationships>', '<Relationship Id="' + PHOTO_RID + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="' + name + '"/></Relationships>'));
+      const ct = await zip.file('[Content_Types].xml').async('string');
+      if (!new RegExp('Extension="' + photo.ext + '"', 'i').test(ct)) {
+        zip.file('[Content_Types].xml', ct.replace('<Default ', '<Default Extension="' + photo.ext + '" ContentType="' + photo.mime + '"/><Default '));
+      }
+    }
+    zip.file('word/document.xml', xml.replace('<!--RESUME_TABLE-->', buildTableXml(model, photo)));
     return zip.generateAsync({ type: type || 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', compression: 'DEFLATE' });
   }
 
@@ -398,6 +451,31 @@
     return out.join('\n');
   }
 
+  // Фото из входного .docx: самое большое изображение в теле документа (не в колонтитулах)
+  async function extractPhoto(data, JSZipLib) {
+    const zip = await JSZipLib.loadAsync(data);
+    const doc = zip.file('word/document.xml'), relsF = zip.file('word/_rels/document.xml.rels');
+    if (!doc || !relsF) return null;
+    const xml = await doc.async('string'), rels = await relsF.async('string');
+    const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', bmp: 'image/bmp' };
+    let best = null;
+    for (const d of xml.match(/<w:drawing>[\s\S]*?<\/w:drawing>/g) || []) {
+      const id = (d.match(/r:embed="([^"]+)"/) || [])[1];
+      const ext = d.match(/<wp:extent cx="(\d+)" cy="(\d+)"/);
+      if (!id || !ext) continue;
+      const rel = rels.match(new RegExp('<Relationship[^>]*Id="' + id + '"[^>]*>')) || [];
+      const target = ((rel[0] || '').match(/Target="([^"]+)"/) || [])[1];
+      if (!target) continue;
+      const path = 'word/' + target.replace(/^\.?\//, '');
+      const f = zip.file(path), e = (target.split('.').pop() || '').toLowerCase();
+      if (!f || !MIME[e]) continue;
+      const bytes = await f.async('uint8array');
+      if (bytes.length < 5000) continue; // иконки и мелочь — не фото
+      if (!best || bytes.length > best.bytes.length) best = { bytes, ext: e === 'jpeg' ? 'jpg' : e, mime: MIME[e], cx: +ext[1], cy: +ext[2] };
+    }
+    return best;
+  }
+
   // Текст из .txt: UTF-8 или Windows-1251
   function decodeTxt(bytes) {
     const u8 = new Uint8Array(bytes);
@@ -407,5 +485,5 @@
     catch (e) { return new TextDecoder('windows-1251').decode(u8); }
   }
 
-  root.Resume = { parse, buildTableXml, buildDocx, docxToText, decodeTxt, PERSONAL };
+  root.Resume = { stripGuide, parse, buildTableXml, buildDocx, docxToText, extractPhoto, decodeTxt, PERSONAL };
 })(typeof window !== 'undefined' ? window : globalThis);

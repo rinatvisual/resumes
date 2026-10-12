@@ -88,8 +88,11 @@
   async function readFile(file) {
     const ext = file.name.toLowerCase().split('.').pop();
     const buf = await file.arrayBuffer();
-    if (ext === 'docx') return Resume.docxToText(buf, JSZip, DOMParser);
-    if (ext === 'txt') return Resume.decodeTxt(buf);
+    if (ext === 'docx') {
+      const photo = await Resume.extractPhoto(buf, JSZip).catch(() => null);
+      return { text: await Resume.docxToText(buf, JSZip, DOMParser), photo };
+    }
+    if (ext === 'txt') return { text: Resume.decodeTxt(buf), photo: null };
     if (ext === 'doc') throw new Error('Старый формат .doc не поддерживается — откройте файл в Word и сохраните как .docx');
     throw new Error('Неподдерживаемый формат: .' + ext);
   }
@@ -98,7 +101,8 @@
     let last = null;
     for (const f of files) {
       try {
-        const it = addItem(f.name, await readFile(f));
+        const got = await readFile(f);
+        const it = addItem(f.name, got.text, got.photo);
         if (cfg.key && cfg.auto) queue.push(it);
         last = it;
       } catch (e) {
@@ -119,8 +123,9 @@
     draining = false;
   }
 
-  function addItem(fileName, text) {
-    const it = { id: ++seq, file: fileName, raw: text, text, model: Resume.parse(text), ai: { state: 'none' } };
+  function addItem(fileName, text, photo) {
+    const it = { id: ++seq, file: fileName, raw: text, text, model: Resume.parse(text), ai: { state: 'none' }, photo: photo || null };
+    if (it.photo) it.photoUrl = URL.createObjectURL(new Blob([it.photo.bytes], { type: it.photo.mime }));
     items.push(it);
     return it;
   }
@@ -167,11 +172,11 @@
 
   function renderPreview() {
     const m = current.model;
-    let h = '<div class="headblock">';
+    let h = (current.photoUrl ? '<img class="photo" src="' + current.photoUrl + '" alt="Фото">' : '') + '<div class="headblock">';
     h += m.name ? P(m.name, 'b') : MISS('ФИО');
     h += m.age ? P(m.age) : MISS('возраст');
     m.headExtra.forEach(l => { h += P(l); });
-    h += H('Отдел:', !m.otdel) + (m.otdel ? P(m.otdel) : MISS('отдел')) + '</div>';
+    h += H('Отдел:', !m.otdel) + (m.otdel ? P(m.otdel) : MISS('отдел')) + '</div><div style="clear:both"></div>';
 
     h += H('Опыт работы:', !m.jobs.length);
     if (!m.jobs.length) h += MISS('опыт работы');
@@ -181,7 +186,7 @@
       h += j.company ? P(j.company, 'b') : MISS('компания');
       h += j.position ? P(j.position, 'b') : MISS('должность');
       h += j.duties.length ? j.duties.map(d => P(d)).join('') : MISS('обязанности');
-      if (j.ach.length) h += P('Достижения:', 'b') + j.ach.map(a => P(a)).join('');
+      h += j.ach.length ? P('Достижения:', 'b') + j.ach.map(a => P(a)).join('') : H('Достижения:', true).replace('class="h', 'class="b') + MISS('достижения');
     });
 
     h += H('Владение ПО:', !m.soft.length) + (m.soft.length ? m.soft.map(l => P(l)).join('') : MISS('владение ПО'));
@@ -192,11 +197,11 @@
 
     const grp = (g, label) => g.length ? g.map(lines => lines.map(l => P(l)).join('')).join(GAP) : MISS(label);
     h += H('Образование:', !m.edu.length) + grp(m.edu, 'образование');
-    h += H('Доп. образование:', !m.addEdu.length) + grp(m.addEdu, 'доп. образование');
+    if (m.addEdu.length) h += H('Доп. образование:', false) + grp(m.addEdu, 'доп. образование');
     h += H('Знание языков и уровень владения:', !m.lang.length) + (m.lang.length ? m.lang.map(l => P(l)).join('') : MISS('знание языков'));
 
     const line = (label, v, ml) => '<p>' + (v ? esc(label) + esc(v) : '<span class="miss">' + esc(label) + '[НЕ ЗАПОЛНЕНО: ' + ml + ']</span>') + '</p>';
-    h += GAP + GAP + line('Ожидания по зарплате: ', m.salary, 'зарплата') + GAP + line('Уровень в котах: ', m.cats, 'уровень');
+    h += GAP + GAP + line('Город проживания: ', m.city, 'город') + GAP + line('Ожидания по зарплате: ', m.salary, 'зарплата') + GAP + line('Уровень в котах: ', m.cats, 'уровень');
     $('paper').innerHTML = h;
 
     const note = $('aiNote'), ai = current.ai;
@@ -210,7 +215,8 @@
       note.innerHTML = (ai.eduHints && ai.eduHints.length ? '<div class="edu-hint"><b>В «О себе» найдено образование — добавьте в «Образование» или «Доп. образование»:</b><ul>' +
         ai.eduHints.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') + (ai.warnings.length ? '<b>Claude просит проверить:</b><ul>' + ai.warnings.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '✓ Claude обработал резюме, замечаний нет.') +
         '<div class="tokens">Токены — вход: ' + fresh + ' обычных, ' + read + ' из кэша, ' + wrote + ' записано в кэш; выход: ' + (u.output_tokens || 0) +
-        (read ? ' · кэш сработал' : wrote ? ' · кэш создан, со следующего резюме будет дешевле' : '') + '</div>';
+        (read ? ' · кэш сработал' : wrote ? ' · кэш создан, со следующего резюме будет дешевле' : '') +
+        (u.repaired ? ' · была доработка (обязанности / «О себе»)' : '') + '</div>';
     }
     $('btnAI').disabled = ai.state === 'busy';
     $('btnAI').textContent = ai.state === 'done' ? 'Обработать заново' : 'Обработать через Claude';
@@ -242,7 +248,7 @@
 
   async function downloadCurrent() {
     if (!current) return;
-    save(await Resume.buildDocx(current.model, window.TEMPLATE_DOCX, JSZip), fileNameFor(current));
+    save(await Resume.buildDocx(current.model, window.TEMPLATE_DOCX, JSZip, 'blob', current.photo), fileNameFor(current));
   }
 
   async function downloadAll() {
@@ -250,7 +256,7 @@
     for (const it of items) {
       let name = fileNameFor(it);
       if (used[name]) name = name.replace(/\.docx$/, '_' + (++used[name]) + '.docx'); else used[name] = 1;
-      zip.file(name, await Resume.buildDocx(it.model, window.TEMPLATE_DOCX, JSZip, 'uint8array'));
+      zip.file(name, await Resume.buildDocx(it.model, window.TEMPLATE_DOCX, JSZip, 'uint8array', it.photo));
     }
     save(await zip.generateAsync({ type: 'blob' }), 'Резюме.zip');
   }
