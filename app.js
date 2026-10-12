@@ -32,7 +32,12 @@
     $('apiKey').focus();
   }
   function saveSettings() {
-    cfg.key = $('apiKey').value.trim();
+    // убираем случайные пробелы, переносы строк, кавычки и невидимые символы
+    cfg.key = $('apiKey').value.replace(/[\s"'«»\u200B-\u200D\uFEFF]/g, '');
+    if (cfg.key && !cfg.key.startsWith('sk-ant-')) {
+      alert('Это не похоже на ключ API: он должен начинаться с «sk-ant-».\nСкопируйте ключ заново в console.anthropic.com → API Keys.');
+      return;
+    }
     cfg.model = $('aiModel').value;
     cfg.auto = $('aiAuto').checked;
     cfg.rules = $('aiRules').value;
