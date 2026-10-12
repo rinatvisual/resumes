@@ -55,10 +55,20 @@
       it.model = Resume.parse(it.text);
       it.ai = { state: 'done', warnings: data.warnings || [], usage };
     } catch (e) {
-      const net = e instanceof TypeError;
-      it.ai = { state: 'error', error: net ? 'Не удалось связаться с Claude API (нет связи или запрос заблокирован): ' + e.message : e.message };
+      it.ai = { state: 'error', error: e instanceof TypeError ? await diagnose() : e.message };
     }
     refresh(it);
+  }
+  // Почему запрос не дошёл: сервер вообще недоступен или ответил отказом
+  async function diagnose() {
+    if (!navigator.onLine) return 'Нет подключения к интернету.';
+    try {
+      await fetch('https://api.anthropic.com/v1/messages', { method: 'GET', mode: 'no-cors', cache: 'no-store' });
+      return 'Сервер Claude ответил, но отказал в доступе ещё до проверки ключа. Так бывает, когда запрос идёт из страны, ' +
+        'где Claude API недоступен (Россия в их число входит), либо его режет антивирус или расширение браузера (например, блокировщик рекламы).';
+    } catch (e2) {
+      return 'Сервер Claude недоступен из этой сети: соединение блокируется провайдером, корпоративной сетью, антивирусом или расширением браузера.';
+    }
   }
   function refresh(it) {
     if (it === current) { if (!showRaw) $('src').value = it.text; renderPreview(); }
