@@ -40,6 +40,12 @@
       <textarea id="aiRules" rows="10" placeholder="Каждое правило с новой строки, своими словами. Например:&#10;- блок «О себе» сокращай до 3–4 предложений&#10;- не больше 7 обязанностей на одно место работы&#10;- работу дольше 10 лет назад не указывай&#10;- «Отдел» всегда: Управление HR"></textarea>
     </label>
     <p class="muted">Эти правила Claude применяет к каждому резюме вдобавок к основной инструкции. <button id="btnDefaultRules" type="button" class="linkbtn">Вернуть стандартные правила</button></p>
+    <label>Кэш инструкции
+      <select id="aiTtl">
+        <option value="1h">1 час — выгодно, если резюме идут с перерывами больше 5 минут</option>
+        <option value="5m">5 минут — выгодно, если резюме идут подряд одно за другим</option>
+      </select>
+    </label>
     <label class="check"><input id="aiAuto" type="checkbox" checked> Обрабатывать через Claude сразу при загрузке</label>
     <div class="settings-actions">
       <button id="btnForgetKey" class="btn ghost">Удалить ключ</button>

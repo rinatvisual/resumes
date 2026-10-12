@@ -16,7 +16,8 @@
     key: store.get('claude_key', ''),
     model: store.get('claude_model2', 'claude-haiku-5-5'),
     rules: store.get('claude_rules2', DEFAULT_RULES),
-    auto: store.get('claude_auto', '1') === '1'
+    auto: store.get('claude_auto', '1') === '1',
+    ttl: store.get('claude_ttl', '1h')
   };
   function renderAiState() {
     const el = $('aiState');
@@ -28,6 +29,7 @@
     $('aiModel').value = cfg.model;
     $('aiAuto').checked = cfg.auto;
     $('aiRules').value = cfg.rules;
+    $('aiTtl').value = cfg.ttl;
     $('settings').hidden = false;
     $('apiKey').focus();
   }
@@ -41,6 +43,8 @@
     cfg.model = $('aiModel').value;
     cfg.auto = $('aiAuto').checked;
     cfg.rules = $('aiRules').value;
+    cfg.ttl = $('aiTtl').value;
+    store.set('claude_ttl', cfg.ttl);
     store.set('claude_key', cfg.key || null);
     store.set('claude_model2', cfg.model);
     store.set('claude_rules2', cfg.rules);
@@ -55,7 +59,7 @@
     it.ai = { state: 'busy' };
     refresh(it);
     try {
-      const { data, usage } = await ResumeAI.process(it.raw, cfg.key, cfg.model, cfg.rules);
+      const { data, usage } = await ResumeAI.process(it.raw, cfg.key, cfg.model, cfg.rules, cfg.ttl);
       it.text = ResumeAI.toCanonicalText(data);
       it.model = Resume.parse(it.text);
       it.ai = { state: 'done', warnings: data.warnings || [], eduHints: data.about_education || [], usage };
@@ -202,10 +206,11 @@
     else if (ai.state === 'error') note.textContent = ai.error;
     else if (ai.state === 'done') {
       const u = ai.usage || {};
-      const tok = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+      const fresh = u.input_tokens || 0, read = u.cache_read_input_tokens || 0, wrote = u.cache_creation_input_tokens || 0;
       note.innerHTML = (ai.eduHints && ai.eduHints.length ? '<div class="edu-hint"><b>В «О себе» найдено образование — добавьте в «Образование» или «Доп. образование»:</b><ul>' +
         ai.eduHints.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') + (ai.warnings.length ? '<b>Claude просит проверить:</b><ul>' + ai.warnings.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '✓ Claude обработал резюме, замечаний нет.') +
-        '<div class="tokens">Токены: ' + tok + ' на входе (из них из кэша ' + (u.cache_read_input_tokens || 0) + '), ' + (u.output_tokens || 0) + ' на выходе</div>';
+        '<div class="tokens">Токены — вход: ' + fresh + ' обычных, ' + read + ' из кэша, ' + wrote + ' записано в кэш; выход: ' + (u.output_tokens || 0) +
+        (read ? ' · кэш сработал' : wrote ? ' · кэш создан, со следующего резюме будет дешевле' : '') + '</div>';
     }
     $('btnAI').disabled = ai.state === 'busy';
     $('btnAI').textContent = ai.state === 'done' ? 'Обработать заново' : 'Обработать через Claude';

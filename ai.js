@@ -112,12 +112,14 @@
   }
 
   // Запрос к Claude
-  async function process(text, apiKey, model, customRules) {
+  async function process(text, apiKey, model, customRules, cacheTtl) {
     const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-    const system = [{ type: 'text', text: systemPrompt(), cache_control: { type: 'ephemeral' } }];
+    const system = [{ type: 'text', text: systemPrompt() }];
     if (customRules && customRules.trim()) {
       system.push({ type: 'text', text: 'ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА РЕКРУТЕРА — обязательно выполняй их (но правило «ничего не выдумывай» всегда главнее; детализация обязанностей до 6 пунктов по основной инструкции выдумкой не считается):\n' + customRules.trim() });
     }
+    // метка кэша на последнем блоке: в кэш попадают описание блоков, инструкция и правила рекрутера
+    system[system.length - 1].cache_control = cacheTtl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' };
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
