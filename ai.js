@@ -205,7 +205,23 @@
       }
     }
 
-    // 3) «О себе» заметно короче исходного — предупредить
+    // 3) повторы в навыках: пункт, который лишь уточняет уже имеющийся («стрессоустойчивость к любым ситуациям»
+    //    при «стрессоустойчивость»), убираем — но только если это не пункт из списка навыков самого кандидата
+    const srcItems = new Set(((srcModel && srcModel.skills) || '').replace(/\.$/, '').split(/\s*[,;]\s*/).map(x => x.trim().toLowerCase()));
+    const sk = d.skills || [];
+    const st = sk.map(x => stems(x).filter(w => !STOP.has(w)));
+    d.skills = sk.filter((x, i) => srcItems.has(x.trim().toLowerCase()) || !st.some((o, k) =>
+      k !== i && o.length && o.length < st[i].length && o.every(w => st[i].includes(w))));
+
+    // 4) объём курсов в часах («252 ч.») — вернуть, если Claude потерял
+    const hours = (src.match(/\d{2,4}\s*(?:ч\.|час(?:ов|а)?|ак\.?\s*ч)/gi) || []).map(h => h.match(/\d+/)[0]);
+    const addEdu = d.additional_education || [];
+    if (addEdu.length === 1) {
+      const txt = JSON.stringify(addEdu[0]);
+      hours.forEach(h => { if (!txt.includes(h)) addEdu[0].specialty = (addEdu[0].specialty || '') + ' (' + h + ' ч.)'; });
+    }
+
+    // 5) «О себе» заметно короче исходного — предупредить
     if (srcModel && srcModel.about && srcModel.about.length) {
       const before = srcModel.about.join(' ').length, after = (d.about || []).join(' ').length;
       if (after < before * 0.65) d.warnings.push('О себе сократилось: ' + before + '→' + after + ' знаков');
