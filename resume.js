@@ -10,7 +10,7 @@
   const NOW_RE = '(?:по\\s+)?(?:настоящее(?:\\s+время)?|н\\.?\\s*в\\.?|наст\\.?\\s*вр\\.?|сейчас|текущее\\s+время)';
   const DATE_LINE = new RegExp('^(?:с\\s+)?(' + POINT_RE + ')\\s*(?:[-–—]+|по)\\s*(' + POINT_RE + '|' + NOW_RE + ')\\s*(\\(.*\\))?\\s*[.,;]?\\s*(.*)$', 'i');
   const DURATION_LINE = /^\(?\s*(\d+\s*(?:год|года|лет|мес\S*)(?:\s+\d+\s*мес\S*)?)\s*\)?$/i;
-  const BULLET_RE = /^\s*(?:[-–—•*·▪●◦►✓]|\d{1,2}[.)])\s*/;
+  const BULLET_RE = /^\s*(?:[-–—•*·▪●◦►✓]|\d{1,2}[.)](?!\d))\s*/;  // «35.03.02» — не номер пункта
 
   const clean = s => s.replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').replace(/["“„]([^"“”„\n]+)["”“]/g, '«$1»').trim();
   const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
