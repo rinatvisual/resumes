@@ -236,7 +236,7 @@
     const jobs = [];
     (d.jobs || []).forEach((j, i) => {
       const du = (j.duties || []).filter(x => String(x || '').trim());
-      if (du.length && ((du.length >= 2 && du.length < 6) || du.some(x => words(x) <= 3) || !String(j.position || '').trim())) jobs.push(i);
+      if (du.length && ((du.length >= 2 && du.length < 6) || du.some(x => words(x) <= 2) || !String(j.position || '').trim())) jobs.push(i);
     });
     const about = (d.about || []).join(' ').trim();
     return { jobs, about: !!about && (sentences(about) < 6 || /\n/.test(about)) };
