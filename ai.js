@@ -150,13 +150,12 @@
     for (let round = 0; round < 2; round++) {
       const need = checkRules(d);
       if (!need.jobs.length && !need.about) break;
-      try {
-        const fix = await repair(d, need, apiKey, model);
-        for (const k in fix.usage) if (typeof fix.usage[k] === 'number') usage[k] = (usage[k] || 0) + fix.usage[k];
-        usage.repaired = true;
-      } catch (e) {
-        d.warnings.push('Доработка не удалась — нажмите «Обработать заново»');
-        break;
+      const fix = await repair(d, need, apiKey, model);
+      for (const k in fix.usage) if (typeof fix.usage[k] === 'number') usage[k] = (usage[k] || 0) + fix.usage[k];
+      if (fix.ok) usage.repaired = true;
+      if (fix.errors.length) {
+        d.warnings.push('Доработка: ошибок ' + fix.errors.length + ' (' + fix.errors[0].slice(0, 90) + ')');
+        if (!fix.ok) break;
       }
     }
     (d.jobs || []).forEach((j, i) => {
@@ -255,7 +254,7 @@
     const usage = {};
     const add = u => { for (const k in u || {}) if (typeof u[k] === 'number') usage[k] = (usage[k] || 0) + u[k]; };
     const experience = (d.jobs || []).map(j => [j.position, j.company].filter(Boolean).join(', '));
-    const tasks = need.jobs.map(async i => {
+    const tasks = need.jobs.map(i => async () => {
       const j = d.jobs[i];
       const r = await call(apiKey, {
         model, max_tokens: 1500, system: FIX_DUTIES_PROMPT,
@@ -271,7 +270,7 @@
       if (!String(j.position || '').trim() && f.position) j.position = f.position;
       if (du.length > before) d.warnings.push((j.company || 'Место ' + (i + 1)) + ': обяз. ' + before + '→' + du.length);
     });
-    if (need.about) tasks.push((async () => {
+    if (need.about) tasks.push(async () => {
       const r = await call(apiKey, {
         model, max_tokens: 1500, system: FIX_ABOUT_PROMPT,
         tools: [FIX_ABOUT_TOOL], tool_choice: { type: 'tool', name: 'fix_about' },
@@ -283,10 +282,18 @@
       const before = sentences((d.about || []).join(' '));
       d.about = [t];
       d.warnings.push('О себе: ' + before + '→' + sentences(t));
-    })());
-    const res = await Promise.allSettled(tasks);
-    if (res.some(x => x.status === 'rejected')) throw new Error('часть доработки не удалась');
-    return { usage };
+    });
+    // не больше 3 запросов одновременно
+    const errors = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < tasks.length) {
+        const t = tasks[next++];
+        try { await t(); } catch (e) { errors.push(e.message); }
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    return { usage, errors, ok: tasks.length - errors.length };
   }
 
   // Запрос к Claude, ответ — блок инструмента
@@ -299,6 +306,17 @@
 
   // Один запрос к Claude API с понятными ошибками
   async function callRaw(apiKey, body) {
+    // временные ошибки сервера (перегрузка, лимит) — повторяем до 3 раз с паузой
+    for (let attempt = 0; ; attempt++) {
+      try { return await callOnce(apiKey, body); }
+      catch (e) {
+        if (!e.retryable || attempt >= 3) throw e;
+        await new Promise(r => setTimeout(r, (e.retryAfter || 2 ** attempt * 2) * 1000));
+      }
+    }
+  }
+
+  async function callOnce(apiKey, body) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -314,8 +332,10 @@
       const msg = (data.error && data.error.message) || res.statusText;
       if (res.status === 401) throw new Error('Claude не принял ключ API (' + msg + '). Ключ скопирован не полностью, удалён или отключён — создайте новый в console.anthropic.com → API Keys и вставьте его в «Настройки Claude».');
       if (res.status === 403) throw new Error('Доступ запрещён (' + msg + '). Обычно это значит, что Claude API недоступен из вашей страны или у аккаунта нет доступа к выбранной модели.');
-      if (res.status === 429) throw new Error('Слишком много запросов — подождите минуту (' + msg + ')');
-      throw new Error('Ошибка Claude API ' + res.status + ': ' + msg);
+      const err = new Error(res.status === 429 ? 'Слишком много запросов — подождите минуту (' + msg + ')' : 'Ошибка Claude API ' + res.status + ': ' + msg);
+      err.retryable = res.status === 429 || res.status >= 500;  // 529 — перегрузка, 500/503 — сбой
+      err.retryAfter = +res.headers.get('retry-after') || 0;
+      throw err;
     }
     return data;
   }
