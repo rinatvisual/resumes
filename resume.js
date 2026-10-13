@@ -260,6 +260,9 @@
     });
   }
 
+  // Есть ли в записи об образовании форма обучения
+  const hasStudyForm = lines => lines.some(l => /форм\S*\s+обучени|очн|заочн|дистанц|экстернат/i.test(l));
+
   function findMissing(m) {
     const miss = [];
     if (!m.name) miss.push('ФИО');
@@ -279,6 +282,7 @@
     PERSONAL.forEach(([k, , label]) => { if (!m.personal[k]) miss.push(label); });
     if (!m.skills) miss.push('Навыки');
     if (!m.edu.length) miss.push('Образование');
+    m.edu.forEach((g, i) => { if (!hasStudyForm(g)) miss.push('Образование, место ' + (i + 1) + ': форма обучения'); });
     if (!m.lang.length) miss.push('Знание языков');
     if (!m.city) miss.push('Город проживания');
     if (!m.salary) miss.push('Ожидания по зарплате');
@@ -373,9 +377,10 @@
     rows.push(rowFull(1500, ab));
 
     // Образование, доп. образование
-    const grp = (g, label) => g.length ? g.map((lines, i) => (i ? p() : '') + lines.map(l => p(r(l))).join('')).join('') : p(missRun(label));
+    const grp = (g, label, needForm) => g.length ? g.map((lines, i) => (i ? p() : '') + lines.map(l => p(r(l))).join('') +
+      (needForm && !hasStudyForm(lines) ? p(missRun('форма обучения')) : '')).join('') : p(missRun(label));
     rows.push(headingRow('Образование:', !m.edu.length));
-    rows.push(rowFull(600, grp(m.edu, 'образование')));
+    rows.push(rowFull(600, grp(m.edu, 'образование', true)));
     // «Доп. образование» убираем, если курсов нет (правило из памятки к шаблону)
     if (m.addEdu.length) {
       rows.push(headingRow('Доп. образование:', false));
@@ -488,5 +493,5 @@
     catch (e) { return new TextDecoder('windows-1251').decode(u8); }
   }
 
-  root.Resume = { stripGuide, parse, buildTableXml, buildDocx, docxToText, extractPhoto, decodeTxt, PERSONAL };
+  root.Resume = { hasStudyForm, stripGuide, parse, buildTableXml, buildDocx, docxToText, extractPhoto, decodeTxt, PERSONAL };
 })(typeof window !== 'undefined' ? window : globalThis);

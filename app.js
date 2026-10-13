@@ -195,8 +195,9 @@
     Resume.PERSONAL.forEach(([k, , label]) => { h += m.personal[k] ? P(m.personal[k]) : MISS(label); });
     h += GAP + '<p><span class="b' + (m.skills ? '' : ' miss') + '">Навыки: </span>' + (m.skills ? esc(m.skills) : '<span class="miss">[НЕ ЗАПОЛНЕНО: навыки]</span>') + '</p>';
 
-    const grp = (g, label) => g.length ? g.map(lines => lines.map(l => P(l)).join('')).join(GAP) : MISS(label);
-    h += H('Образование:', !m.edu.length) + grp(m.edu, 'образование');
+    const grp = (g, label, needForm) => g.length ? g.map(lines => lines.map(l => P(l)).join('') +
+      (needForm && !Resume.hasStudyForm(lines) ? MISS('форма обучения') : '')).join(GAP) : MISS(label);
+    h += H('Образование:', !m.edu.length) + grp(m.edu, 'образование', true);
     if (m.addEdu.length) h += H('Доп. образование:', false) + grp(m.addEdu, 'доп. образование');
     h += H('Знание языков и уровень владения:', !m.lang.length) + (m.lang.length ? m.lang.map(l => P(l)).join('') : MISS('знание языков'));
 
