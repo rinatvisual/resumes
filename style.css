@@ -97,3 +97,4 @@ button { font: inherit; }
 .edu-hint { color: var(--red); background: var(--red-bg); margin: -10px -14px 10px; padding: 10px 14px; }
 .paper .photo { float: left; width: 28%; max-width: 190px; margin: 0 4% 12px 0; }
 .paper .headblock { overflow: hidden; }
+.ver { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 6px; }
