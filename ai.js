@@ -350,6 +350,10 @@
     return { input: block.input, usage: data.usage || {} };
   }
 
+  // Адрес для обычных запросов: напрямую в Anthropic или через посредника (настройка «Все запросы через посредника»)
+  let apiBase = 'https://api.anthropic.com';
+  function setBase(url) { apiBase = url || 'https://api.anthropic.com'; }
+
   // Один запрос к Claude API с понятными ошибками
   async function callRaw(apiKey, body) {
     // временные ошибки сервера (перегрузка, лимит) — повторяем до 3 раз с паузой
@@ -363,7 +367,7 @@
   }
 
   async function callOnce(apiKey, body) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(apiBase + '/v1/messages', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -482,5 +486,5 @@
     return L.join('\n');
   }
 
-  root.ResumeAI = { process, finish, buildMainBody, batchCreate, batchList, batchGet, batchResults, toCanonicalText, compact, checkRules, guard, TOOL, systemPrompt };
+  root.ResumeAI = { setBase, process, finish, buildMainBody, batchCreate, batchList, batchGet, batchResults, toCanonicalText, compact, checkRules, guard, TOOL, systemPrompt };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -19,8 +19,11 @@
     auto: store.get('claude_auto', '1') === '1',
     ttl: store.get('claude_ttl', '1h'),
     batch: store.get('claude_batch', '0') === '1',
-    proxy: store.get('claude_proxy', '')
+    proxy: store.get('claude_proxy', ''),
+    proxyAll: store.get('claude_proxy_all', '0') === '1'
   };
+  const applyBase = () => ResumeAI.setBase(cfg.proxyAll && cfg.proxy ? cfg.proxy : '');
+  applyBase();
   function renderAiState() {
     const el = $('aiState');
     el.textContent = cfg.key ? '● Claude подключён' : '○ Claude не подключён';
@@ -34,6 +37,7 @@
     $('aiTtl').value = cfg.ttl;
     $('aiBatch').checked = cfg.batch;
     $('aiProxy').value = cfg.proxy;
+    $('aiProxyAll').checked = cfg.proxyAll;
     $('settings').hidden = false;
     $('apiKey').focus();
   }
@@ -54,7 +58,10 @@
     if (px && !/^https?:\/\//.test(px)) px = 'https://' + px;
     cfg.proxy = px;
     store.set('claude_proxy', px || null);
-    if (cfg.batch && !px) { alert('Для пакетной обработки вставьте адрес посредника (Cloudflare Worker).'); return; }
+    cfg.proxyAll = $('aiProxyAll').checked;
+    store.set('claude_proxy_all', cfg.proxyAll ? '1' : '0');
+    if ((cfg.batch || cfg.proxyAll) && !px) { alert('Вставьте адрес посредника (Cloudflare Worker).'); return; }
+    applyBase();
     store.set('claude_ttl', cfg.ttl);
     store.set('claude_batch', cfg.batch ? '1' : '0');
     store.set('claude_key', cfg.key || null);
@@ -219,6 +226,7 @@
   // Почему запрос не дошёл: сервер вообще недоступен или ответил отказом
   async function diagnose() {
     if (!navigator.onLine) return 'Нет подключения к интернету.';
+    if (cfg.proxyAll && cfg.proxy) return 'Не удалось связаться с посредником. Откройте его адрес в браузере: должна быть надпись «Посредник работает (версия 2)». Если версии 2 нет — обновите код посредника на Cloudflare.';
     try {
       await fetch('https://api.anthropic.com/v1/messages', { method: 'GET', mode: 'no-cors', cache: 'no-store' });
       return 'Сервер Claude ответил, но отказал в доступе ещё до проверки ключа. Так бывает, когда запрос идёт из страны, ' +

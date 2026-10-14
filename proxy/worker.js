@@ -1,4 +1,4 @@
-// Посредник для пакетной обработки Claude: пропускает только запросы к пакетам и добавляет разрешение для сайта
+// Посредник для запросов к Claude: пропускает только запросы /v1/messages (обычные и пакетные) и добавляет разрешение для сайта
 const ALLOWED = ['https://rinatvisual.github.io', 'null']; // null — сайт, открытый файлом с компьютера
 
 export default {
@@ -13,8 +13,8 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
 
     const url = new URL(req.url);
-    if (!url.pathname.startsWith('/v1/messages/batches')) {
-      return new Response('Посредник работает. Он пропускает только пакетные запросы Claude.', { status: 200, headers: cors });
+    if (!url.pathname.startsWith('/v1/messages')) {
+      return new Response('Посредник работает (версия 2). Он пропускает только запросы к Claude.', { status: 200, headers: cors });
     }
 
     // передаём в Anthropic только нужные заголовки; ключ API приходит из браузера и нигде не хранится
