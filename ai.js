@@ -387,15 +387,16 @@
   }
 
   // ---------- Пакетная обработка (Message Batches API, −50% к цене) ----------
-  async function batchCreate(apiKey, requests) {
-    return callRawPath(apiKey, 'POST', '/v1/messages/batches', { requests });
+  // пакеты идут через посредника (base) — напрямую из браузера Anthropic их не принимает
+  async function batchCreate(apiKey, requests, base) {
+    return callRawPath(apiKey, 'POST', '/v1/messages/batches', { requests }, base);
   }
-  async function batchGet(apiKey, id) {
-    return callRawPath(apiKey, 'GET', '/v1/messages/batches/' + id);
+  async function batchGet(apiKey, id, base) {
+    return callRawPath(apiKey, 'GET', '/v1/messages/batches/' + id, null, base);
   }
   // результаты — JSONL: по строке на резюме; возвращаем { custom_id: {input, usage} | {error} }
-  async function batchResults(apiKey, url) {
-    const res = await fetch(url, { headers: apiHeaders(apiKey) });
+  async function batchResults(apiKey, url, base) {
+    const res = await fetch(base ? url.replace('https://api.anthropic.com', base) : url, { headers: apiHeaders(apiKey) });
     if (!res.ok) throw new Error('Не удалось получить результаты пакета: ' + res.status);
     const out = {};
     (await res.text()).split('\n').filter(Boolean).forEach(line => {
@@ -415,8 +416,8 @@
     'anthropic-version': '2023-06-01',
     'anthropic-dangerous-direct-browser-access': 'true'
   });
-  async function callRawPath(apiKey, method, path, body) {
-    const res = await fetch('https://api.anthropic.com' + path, { method, headers: apiHeaders(apiKey), body: body ? JSON.stringify(body) : undefined });
+  async function callRawPath(apiKey, method, path, body, base) {
+    const res = await fetch((base || 'https://api.anthropic.com') + path, { method, headers: apiHeaders(apiKey), body: body ? JSON.stringify(body) : undefined });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error('Ошибка Claude API ' + res.status + ': ' + ((data.error && data.error.message) || res.statusText));
     return data;

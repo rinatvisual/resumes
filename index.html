@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Резюме по шаблону</title>
-<link rel="stylesheet" href="style.css?v=2026.10.14-3">
+<link rel="stylesheet" href="style.css?v=2026.10.14-4">
 </head>
 <body>
 <header class="top">
   <div class="brand">
     <span class="logo">Р</span>
     <div>
-      <h1>Резюме по шаблону <span class="ver">версия 2026.10.14-3</span></h1>
+      <h1>Резюме по шаблону <span class="ver">версия 2026.10.14-4</span></h1>
       <p>Загрузите .docx или .txt — получите Word в едином оформлении. Пропущенные блоки отмечаются красным.</p>
     </div>
   </div>
@@ -48,6 +48,9 @@
       </select>
     </label>
     <label class="check"><input id="aiBatch" type="checkbox"> Пакетная обработка — в 2 раза дешевле, но результат приходит не сразу (обычно до часа, максимум 24 часа). Загрузите резюме и нажмите «Отправить пакетом» вверху.</label>
+    <label>Адрес посредника для пакетов (Cloudflare Worker)
+      <input id="aiProxy" type="text" placeholder="https://resumes-proxy.ваш-логин.workers.dev" autocomplete="off">
+    </label>
     <label class="check"><input id="aiAuto" type="checkbox" checked> Обрабатывать через Claude сразу при загрузке</label>
     <div class="settings-actions">
       <button id="btnForgetKey" class="btn ghost">Удалить ключ</button>
@@ -105,10 +108,10 @@
   </section>
 </main>
 
-<script src="lib/jszip.min.js?v=2026.10.14-3"></script>
-<script src="template.js?v=2026.10.14-3"></script>
-<script src="resume.js?v=2026.10.14-3"></script>
-<script src="ai.js?v=2026.10.14-3"></script>
-<script src="app.js?v=2026.10.14-3"></script>
+<script src="lib/jszip.min.js?v=2026.10.14-4"></script>
+<script src="template.js?v=2026.10.14-4"></script>
+<script src="resume.js?v=2026.10.14-4"></script>
+<script src="ai.js?v=2026.10.14-4"></script>
+<script src="app.js?v=2026.10.14-4"></script>
 </body>
 </html>

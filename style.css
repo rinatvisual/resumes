@@ -84,7 +84,7 @@ button { font: inherit; }
 .settings-box label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 13px; }
 .settings-box label.check { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; }
 .settings-box textarea { font-family: inherit; font-size: 13px; line-height: 1.4; font-weight: 400; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
-.settings-box input[type=password], .settings-box select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.settings-box input[type=password], .settings-box input[type=text], .settings-box select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
 .settings-box .muted { margin: 0; }
 .settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .ai-note { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); background: #fff8e1; color: #7a5200; }

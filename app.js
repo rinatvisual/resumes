@@ -18,7 +18,8 @@
     rules: store.get('claude_rules2', DEFAULT_RULES),
     auto: store.get('claude_auto', '1') === '1',
     ttl: store.get('claude_ttl', '1h'),
-    batch: store.get('claude_batch', '0') === '1'
+    batch: store.get('claude_batch', '0') === '1',
+    proxy: store.get('claude_proxy', '')
   };
   function renderAiState() {
     const el = $('aiState');
@@ -32,6 +33,7 @@
     $('aiRules').value = cfg.rules;
     $('aiTtl').value = cfg.ttl;
     $('aiBatch').checked = cfg.batch;
+    $('aiProxy').value = cfg.proxy;
     $('settings').hidden = false;
     $('apiKey').focus();
   }
@@ -47,6 +49,12 @@
     cfg.rules = $('aiRules').value;
     cfg.ttl = $('aiTtl').value;
     cfg.batch = $('aiBatch').checked;
+    // адрес посредника: https://…workers.dev без слеша в конце
+    let px = $('aiProxy').value.trim().replace(/\/+$/, '');
+    if (px && !/^https?:\/\//.test(px)) px = 'https://' + px;
+    cfg.proxy = px;
+    store.set('claude_proxy', px || null);
+    if (cfg.batch && !px) { alert('Для пакетной обработки вставьте адрес посредника (Cloudflare Worker).'); return; }
     store.set('claude_ttl', cfg.ttl);
     store.set('claude_batch', cfg.batch ? '1' : '0');
     store.set('claude_key', cfg.key || null);
@@ -99,10 +107,11 @@
     if (!cfg.key) { openSettings(); return; }
     const list = waitingForBatch();
     if (!list.length || batch) return;
+    if (!cfg.proxy) { alert('Для пакетной обработки нужен адрес посредника — откройте «Настройки Claude».'); openSettings(); return; }
     $('btnBatch').disabled = true;
     try {
       const requests = list.map(it => ({ custom_id: 'r' + it.id, params: ResumeAI.buildMainBody(it.raw, cfg.model, cfg.rules, '1h') }));
-      const b = await ResumeAI.batchCreate(cfg.key, requests);
+      const b = await ResumeAI.batchCreate(cfg.key, requests, cfg.proxy);
       batch = { id: b.id, ids: list.map(it => it.id), counts: b.request_counts };
       list.forEach(it => { it.ai = { state: 'batch' }; });
       await idb.set('batch', { id: b.id, items: list.map(it => ({ id: it.id, file: it.file, raw: it.raw, photo: it.photo })) });
@@ -110,7 +119,7 @@
       pollBatch();
     } catch (e) {
       alert('Не удалось отправить пакет:\n' + (e instanceof TypeError
-        ? 'Anthropic не принимает пакетные запросы напрямую из браузера (обычные — принимает). Для пакетного режима нужен посредник. Пока выключите «Пакетную обработку» в настройках — резюме обработаются по одному.'
+        ? 'Не удалось связаться с посредником. Проверьте адрес посредника в «Настройках Claude» (должен открываться в браузере и показывать «Посредник работает»).'
         : e.message));
     }
     $('btnBatch').disabled = false;
@@ -120,7 +129,7 @@
   async function pollBatch() {
     if (!batch) return;
     try {
-      const b = await ResumeAI.batchGet(cfg.key, batch.id);
+      const b = await ResumeAI.batchGet(cfg.key, batch.id, cfg.proxy);
       batch.counts = b.request_counts;
       renderBatchState();
       if (b.processing_status === 'ended') return finishBatch(b);
@@ -129,7 +138,7 @@
   }
 
   async function finishBatch(b) {
-    const res = await ResumeAI.batchResults(cfg.key, b.results_url);
+    const res = await ResumeAI.batchResults(cfg.key, b.results_url, cfg.proxy);
     const its = items.filter(it => batch.ids.includes(it.id));
     batch = null;
     await idb.set('batch', null);
