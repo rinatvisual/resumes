@@ -1,5 +1,5 @@
 /* Посредник для запросов к Claude: пропускает только запросы /v1/messages (обычные и пакетные) и добавляет разрешение для сайта */
-const ALLOWED = ['https:/* rinatvisual.github.io', 'null']; // null — сайт, открытый файлом с компьютера */
+const ALLOWED = ['https://rinatvisual.github.io', 'null']; /* null — сайт, открытый файлом с компьютера */
 
 export default {
   async fetch(req) {
@@ -23,7 +23,7 @@ export default {
       const v = req.headers.get(h);
       if (v) headers.set(h, v);
     }
-    const r = await fetch('https:/* api.anthropic.com' + url.pathname + url.search, { */
+    const r = await fetch('https://api.anthropic.com' + url.pathname + url.search, {
       method: req.method,
       headers,
       body: req.method === 'POST' ? await req.arrayBuffer() : undefined
