@@ -109,7 +109,9 @@
       renderList(); if (current) renderPreview();
       pollBatch();
     } catch (e) {
-      alert('Не удалось отправить пакет:\n' + (e instanceof TypeError ? await diagnose() : e.message));
+      alert('Не удалось отправить пакет:\n' + (e instanceof TypeError
+        ? 'Anthropic не принимает пакетные запросы напрямую из браузера (обычные — принимает). Для пакетного режима нужен посредник. Пока выключите «Пакетную обработку» в настройках — резюме обработаются по одному.'
+        : e.message));
     }
     $('btnBatch').disabled = false;
     renderBatchState();
