@@ -375,7 +375,7 @@
       if (j.duties.length) j.duties.forEach(d => { ex += p(r(d)); });
       else ex += p(missRun('обязанности'));
       ex += p(r('Достижения:', { b: true, red: !j.ach.length }));
-      if (j.ach.length) j.ach.forEach(a => { ex += p(r(a)); });
+      if (j.ach.length) ex += p(r(j.ach.join(' ')));  // одним абзацем, как в эталоне
       else ex += p(missRun('достижения'));
     });
     rows.push(rowFull(1244, ex));

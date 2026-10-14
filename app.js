@@ -363,7 +363,7 @@
       h += j.company ? P(j.company, 'b') : MISS('компания');
       h += j.position ? P(j.position, 'b') : MISS('должность');
       h += j.duties.length ? j.duties.map(d => P(d)).join('') : MISS('обязанности');
-      h += j.ach.length ? P('Достижения:', 'b') + j.ach.map(a => P(a)).join('') : H('Достижения:', true).replace('class="h', 'class="b') + MISS('достижения');
+      h += j.ach.length ? P('Достижения:', 'b') + P(j.ach.join(' ')) : H('Достижения:', true).replace('class="h', 'class="b') + MISS('достижения');
     });
 
     h += H('Владение ПО:', !m.soft.length) + (m.soft.length ? m.soft.map(l => P(l)).join('') : MISS('владение ПО'));
