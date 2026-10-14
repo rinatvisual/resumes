@@ -44,7 +44,7 @@
 - languages: «<Язык> - <уровень>». Если уровень не указан — только язык. Русский как родной не указывай. Прочерк «-» — значит пусто.
 - salary: число с пробелами по разрядам; приписки «от», «и выше» сохраняй. Если суммы нет — null.
 - otdel и cats заполняй, только если они явно есть в тексте.
-- warnings: телеграфным стилем, до 6 слов в пункте. Только реальные противоречия (в том числе даты достижений вне периода работы), сомнительные места и отметки о расширении («<компания>: обяз. N→6», «О себе: N→6»). Пустые блоки не перечисляй.
+- warnings: телеграфным стилем, до 6 слов в пункте. НЕ пиши замечаний о количестве обязанностей, об отделах, о форматировании и о том, что всё в порядке. Только реальные противоречия (в том числе даты достижений вне периода работы), сомнительные места и отметки о расширении («<компания>: обяз. N→6», «О себе: N→6»). Пустые блоки не перечисляй.
 
 ПЕРЕД ВЫЗОВОМ save_resume ПРОВЕРЬ СЕБЯ:
 1) все навыки кандидата есть в skills, ни один не потерян и ни один не добавлен от себя;
@@ -152,9 +152,31 @@
   }
 
   // Доработка и проверки после основного ответа (обычный и пакетный режим)
+  // Haiku иногда возвращает список одной строкой (или строкой с JSON) — приводим всё к спискам
+  function toList(v) {
+    if (Array.isArray(v)) return v.map(x => (typeof x === 'string' ? x : x == null ? '' : String(x))).filter(x => x.trim());
+    if (v == null) return [];
+    if (typeof v === 'string') {
+      const t = v.trim();
+      if (!t) return [];
+      if (t[0] === '[') { try { return toList(JSON.parse(t)); } catch (e) { /* не JSON — режем по строкам */ } }
+      return t.split(/\n+|;\s*(?=[А-ЯЁA-Z])/).map(x => x.replace(/^[-–•\s]+/, '').trim()).filter(Boolean);
+    }
+    return [String(v)];
+  }
+  function normalize(d) {
+    if (typeof d.skills === 'string') d.skills = d.skills.split(/[,;\n]+/);  // навыки строкой — через запятую
+    ['software', 'about', 'skills', 'languages', 'warnings', 'about_education'].forEach(k => { d[k] = toList(d[k]); });
+    d.jobs = Array.isArray(d.jobs) ? d.jobs : [];
+    d.jobs.forEach(j => { j.duties = toList(j.duties); j.achievements = toList(j.achievements); });
+    ['education', 'additional_education'].forEach(k => { d[k] = Array.isArray(d[k]) ? d[k] : []; });
+    // замечания Claude про количество обязанностей и про отделы — не по делу (это проверяет сайт)
+    d.warnings = d.warnings.filter(w => !/обяз|отдел|подразделен/i.test(w));
+    return d;
+  }
+
   async function finish(input, firstUsage, text, apiKey, model) {
-    const d = input, usage = Object.assign({}, firstUsage);
-    d.warnings = d.warnings || [];
+    const d = normalize(input || {}), usage = Object.assign({}, firstUsage);
 
     // Проверка ответа: если Haiku не довёл обязанности или «О себе» до нормы — доработка (до 2 заходов)
     for (let round = 0; round < 2; round++) {
@@ -309,7 +331,7 @@
       });
       add(r.usage);
       const f = r.input || {};
-      const du = (f.duties || []).map(x => String(x || '').trim()).filter(Boolean);
+      const du = toList(f.duties);
       const before = j.duties.length;
       if (!du.length || du.length < before) return;  // ответ короче исходного — не принимаем
       j.duties = du;
