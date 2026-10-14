@@ -141,8 +141,9 @@
     const res = await ResumeAI.batchResults(cfg.key, b.results_url, cfg.proxy);
     const its = items.filter(it => batch.ids.includes(it.id));
     batch = null;
-    await idb.set('batch', null);
     renderBatchState();
+    // запись о пакете удаляем только после доработки ВСЕХ резюме: если обновить страницу посреди
+    // доработки, пакет снова найдётся и результаты заберутся заново (они хранятся у Anthropic 29 дней)
     // доработка и проверки — обычными запросами, по очереди
     for (const it of its) {
       const r = res['r' + it.id];
@@ -155,6 +156,7 @@
       } catch (e) { it.ai = { state: 'error', error: e.message }; }
       refresh(it);
     }
+    await idb.set('batch', null);
   }
 
   function renderBatchState() {
