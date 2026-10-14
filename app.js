@@ -249,17 +249,18 @@
       return { text: await Resume.docxToText(buf, JSZip, DOMParser), photo };
     }
     if (ext === 'txt') return { text: Resume.decodeTxt(buf), photo: null };
+    if (ext === 'pdf') return PdfRead.read(buf);
     if (ext === 'zip') {
       // архив: берём все .docx и .txt внутри (в том числе во вложенных папках)
       const zip = await JSZip.loadAsync(buf), out = [];
-      const names = Object.keys(zip.files).filter(n => !zip.files[n].dir && !/(^|\/)(__MACOSX|\.|~\$)/.test(n) && /\.(docx|txt)$/i.test(n)).sort();
+      const names = Object.keys(zip.files).filter(n => !zip.files[n].dir && !/(^|\/)(__MACOSX|\.|~\$)/.test(n) && /\.(docx|txt|pdf)$/i.test(n)).sort();
       for (const n of names) {
         const data = await zip.files[n].async('arraybuffer');
         const short = n.split('/').pop();
         try { out.push(Object.assign({ name: short }, await readFile({ name: short, arrayBuffer: async () => data }))); }
         catch (e) { out.push({ name: short, error: e.message }); }
       }
-      if (!out.length) throw new Error('В архиве нет файлов .docx или .txt');
+      if (!out.length) throw new Error('В архиве нет файлов .docx, .pdf или .txt');
       return out;
     }
     if (ext === 'doc') throw new Error('Старый формат .doc не поддерживается — откройте файл в Word и сохраните как .docx');
