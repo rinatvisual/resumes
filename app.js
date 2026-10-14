@@ -17,7 +17,8 @@
     model: store.get('claude_model2', 'claude-haiku-5-5'),
     rules: store.get('claude_rules2', DEFAULT_RULES),
     auto: store.get('claude_auto', '1') === '1',
-    ttl: store.get('claude_ttl', '1h')
+    ttl: store.get('claude_ttl', '1h'),
+    batch: store.get('claude_batch', '0') === '1'
   };
   function renderAiState() {
     const el = $('aiState');
@@ -30,6 +31,7 @@
     $('aiAuto').checked = cfg.auto;
     $('aiRules').value = cfg.rules;
     $('aiTtl').value = cfg.ttl;
+    $('aiBatch').checked = cfg.batch;
     $('settings').hidden = false;
     $('apiKey').focus();
   }
@@ -44,13 +46,19 @@
     cfg.auto = $('aiAuto').checked;
     cfg.rules = $('aiRules').value;
     cfg.ttl = $('aiTtl').value;
+    cfg.batch = $('aiBatch').checked;
     store.set('claude_ttl', cfg.ttl);
+    store.set('claude_batch', cfg.batch ? '1' : '0');
     store.set('claude_key', cfg.key || null);
     store.set('claude_model2', cfg.model);
     store.set('claude_rules2', cfg.rules);
     store.set('claude_auto', cfg.auto ? '1' : '0');
     $('settings').hidden = true;
-    renderAiState();
+    $('btnBatch').onclick = sendBatch;
+  renderAiState();
+  renderBatchState();
+  restoreBatch();
+    renderList();
   }
 
   // ---------- Обработка через Claude ----------
@@ -59,15 +67,113 @@
     it.ai = { state: 'busy' };
     refresh(it);
     try {
-      const { data, usage } = await ResumeAI.process(it.raw, cfg.key, cfg.model, cfg.rules, cfg.ttl);
-      it.text = ResumeAI.toCanonicalText(data);
-      it.model = Resume.parse(it.text);
-      it.ai = { state: 'done', warnings: data.warnings || [], eduHints: data.about_education || [], usage };
+      applyResult(it, await ResumeAI.process(it.raw, cfg.key, cfg.model, cfg.rules, cfg.ttl));
     } catch (e) {
       it.ai = { state: 'error', error: e instanceof TypeError ? await diagnose() : e.message };
     }
     refresh(it);
   }
+  function applyResult(it, { data, usage }) {
+    it.text = ResumeAI.toCanonicalText(data);
+    it.model = Resume.parse(it.text);
+    it.ai = { state: 'done', warnings: data.warnings || [], eduHints: data.about_education || [], usage };
+  }
+
+  // ---------- Пакетная обработка (дешевле в 2 раза, результат — от минут до 24 часов) ----------
+  // Пакет сохраняется в браузере (IndexedDB), чтобы не потеряться, если закрыть страницу.
+  const idb = {
+    open() {
+      return new Promise((ok, fail) => {
+        const r = indexedDB.open('resumes', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('kv');
+        r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error);
+      });
+    },
+    async get(k) { try { const db = await this.open(); return await new Promise(ok => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => ok(q.result); q.onerror = () => ok(null); }); } catch (e) { return null; } },
+    async set(k, v) { try { const db = await this.open(); await new Promise(ok => { const t = db.transaction('kv', 'readwrite'); v == null ? t.objectStore('kv').delete(k) : t.objectStore('kv').put(v, k); t.oncomplete = ok; t.onerror = ok; }); } catch (e) { /* без сохранения */ } }
+  };
+  let batch = null;  // { id, ids: [...], counts }
+  const waitingForBatch = () => items.filter(it => it.ai.state === 'none' || it.ai.state === 'error');
+
+  async function sendBatch() {
+    if (!cfg.key) { openSettings(); return; }
+    const list = waitingForBatch();
+    if (!list.length || batch) return;
+    $('btnBatch').disabled = true;
+    try {
+      const requests = list.map(it => ({ custom_id: 'r' + it.id, params: ResumeAI.buildMainBody(it.raw, cfg.model, cfg.rules, '1h') }));
+      const b = await ResumeAI.batchCreate(cfg.key, requests);
+      batch = { id: b.id, ids: list.map(it => it.id), counts: b.request_counts };
+      list.forEach(it => { it.ai = { state: 'batch' }; });
+      await idb.set('batch', { id: b.id, items: list.map(it => ({ id: it.id, file: it.file, raw: it.raw, photo: it.photo })) });
+      renderList(); if (current) renderPreview();
+      pollBatch();
+    } catch (e) {
+      alert('Не удалось отправить пакет:\n' + (e instanceof TypeError ? await diagnose() : e.message));
+    }
+    $('btnBatch').disabled = false;
+    renderBatchState();
+  }
+
+  async function pollBatch() {
+    if (!batch) return;
+    try {
+      const b = await ResumeAI.batchGet(cfg.key, batch.id);
+      batch.counts = b.request_counts;
+      renderBatchState();
+      if (b.processing_status === 'ended') return finishBatch(b);
+    } catch (e) { /* нет связи — попробуем позже */ }
+    setTimeout(pollBatch, 30000);
+  }
+
+  async function finishBatch(b) {
+    const res = await ResumeAI.batchResults(cfg.key, b.results_url);
+    const its = items.filter(it => batch.ids.includes(it.id));
+    batch = null;
+    await idb.set('batch', null);
+    renderBatchState();
+    // доработка и проверки — обычными запросами, по очереди
+    for (const it of its) {
+      const r = res['r' + it.id];
+      if (!r || r.error) { it.ai = { state: 'error', error: 'Пакет: ' + ((r && r.error) || 'нет результата') }; refresh(it); continue; }
+      it.ai = { state: 'busy' }; refresh(it);
+      try {
+        const out = await ResumeAI.finish(r.input, r.usage, it.raw, cfg.key, cfg.model);
+        out.usage.batch = true;
+        applyResult(it, out);
+      } catch (e) { it.ai = { state: 'error', error: e.message }; }
+      refresh(it);
+    }
+  }
+
+  function renderBatchState() {
+    const btn = $('btnBatch'), st = $('batchState');
+    const n = waitingForBatch().length;
+    btn.hidden = !cfg.batch || !!batch || !n;
+    btn.textContent = 'Отправить пакетом (' + n + ')';
+    if (batch) {
+      const c = batch.counts || {};
+      const done = (c.succeeded || 0) + (c.errored || 0) + (c.expired || 0) + (c.canceled || 0);
+      st.hidden = false;
+      st.textContent = 'Пакет в работе: готово ' + done + ' из ' + batch.ids.length + ' · проверяю раз в 30 сек. Страницу можно закрыть — пакет продолжится при следующем открытии.';
+    } else st.hidden = true;
+  }
+
+  // при открытии страницы — продолжить незавершённый пакет
+  async function restoreBatch() {
+    const saved = await idb.get('batch');
+    if (!saved || !saved.id) return;
+    saved.items.forEach(x => {
+      const it = addItem(x.file, x.raw, x.photo);
+      it.id = x.id; seq = Math.max(seq, x.id);
+      it.ai = { state: 'batch' };
+    });
+    batch = { id: saved.id, ids: saved.items.map(x => x.id), counts: {} };
+    if (items.length) select(items[0]);
+    renderBatchState();
+    pollBatch();
+  }
+
   // Почему запрос не дошёл: сервер вообще недоступен или ответил отказом
   async function diagnose() {
     if (!navigator.onLine) return 'Нет подключения к интернету.';
@@ -93,23 +199,42 @@
       return { text: await Resume.docxToText(buf, JSZip, DOMParser), photo };
     }
     if (ext === 'txt') return { text: Resume.decodeTxt(buf), photo: null };
+    if (ext === 'zip') {
+      // архив: берём все .docx и .txt внутри (в том числе во вложенных папках)
+      const zip = await JSZip.loadAsync(buf), out = [];
+      const names = Object.keys(zip.files).filter(n => !zip.files[n].dir && !/(^|\/)(__MACOSX|\.|~\$)/.test(n) && /\.(docx|txt)$/i.test(n)).sort();
+      for (const n of names) {
+        const data = await zip.files[n].async('arraybuffer');
+        const short = n.split('/').pop();
+        try { out.push(Object.assign({ name: short }, await readFile({ name: short, arrayBuffer: async () => data }))); }
+        catch (e) { out.push({ name: short, error: e.message }); }
+      }
+      if (!out.length) throw new Error('В архиве нет файлов .docx или .txt');
+      return out;
+    }
     if (ext === 'doc') throw new Error('Старый формат .doc не поддерживается — откройте файл в Word и сохраните как .docx');
     throw new Error('Неподдерживаемый формат: .' + ext);
   }
 
   async function addFiles(files) {
     let last = null;
+    const errors = [];
     for (const f of files) {
       try {
         const got = await readFile(f);
-        const it = addItem(f.name, got.text, got.photo);
-        if (cfg.key && cfg.auto) queue.push(it);
-        last = it;
+        for (const g of Array.isArray(got) ? got : [Object.assign({ name: f.name }, got)]) {
+          if (g.error) { errors.push(g.name + ': ' + g.error); continue; }
+          const it = addItem(g.name, g.text, g.photo);
+          if (cfg.key && cfg.auto && !cfg.batch) queue.push(it);  // в пакетном режиме ждём кнопку «Отправить пакетом»
+          last = it;
+        }
       } catch (e) {
-        alert(f.name + ':\n' + e.message);
+        errors.push(f.name + ': ' + e.message);
       }
     }
+    if (errors.length) alert('Не удалось прочитать:\n' + errors.join('\n'));
     if (last) select(last);
+    renderBatchState();
     drainQueue();
   }
 
@@ -141,12 +266,13 @@
       li.innerHTML = '<span class="nm"></span><span class="fn"></span><span class="x"><span class="badge ' + (n ? 'bad' : 'good') + '">' +
         (n ? 'нет ' + n + ' ' + (n % 10 === 1 && n % 100 !== 11 ? 'блока' : 'блоков') : '✓') + '</span><button class="del" title="Убрать">×</button></span>';
       li.querySelector('.nm').textContent = it.model.name || 'Без имени';
-      li.querySelector('.fn').textContent = it.file + (it.ai.state === 'busy' ? ' · Claude обрабатывает…' : it.ai.state === 'done' ? ' · обработано Claude' : it.ai.state === 'error' ? ' · ошибка Claude' : '');
+      li.querySelector('.fn').textContent = it.file + (it.ai.state === 'busy' ? ' · Claude обрабатывает…' : it.ai.state === 'batch' ? ' · в пакете' : it.ai.state === 'done' ? ' · обработано Claude' : it.ai.state === 'error' ? ' · ошибка Claude' : '');
       li.onclick = () => select(it);
       li.querySelector('.del').onclick = e => { e.stopPropagation(); remove(it); };
       ul.appendChild(li);
     });
     $('btnZip').disabled = items.length < 2;
+    renderBatchState();
   }
 
   function select(it) {
@@ -208,8 +334,9 @@
 
     const note = $('aiNote'), ai = current.ai;
     note.hidden = ai.state === 'none';
-    note.className = 'ai-note' + (ai.state === 'error' ? ' err' : ai.state === 'busy' ? ' busy' : '');
+    note.className = 'ai-note' + (ai.state === 'error' ? ' err' : ai.state === 'busy' || ai.state === 'batch' ? ' busy' : '');
     if (ai.state === 'busy') note.textContent = 'Claude обрабатывает резюме… Обычно это занимает 10–40 секунд.';
+    else if (ai.state === 'batch') note.textContent = 'Резюме в пакете Claude. Результат появится, когда пакет будет готов (обычно до часа).';
     else if (ai.state === 'error') note.textContent = ai.error;
     else if (ai.state === 'done') {
       const u = ai.usage || {};
@@ -218,9 +345,9 @@
         ai.eduHints.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') + (ai.warnings.length ? '<b>Claude просит проверить:</b><ul>' + ai.warnings.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '✓ Claude обработал резюме, замечаний нет.') +
         '<div class="tokens">Токены — вход: ' + fresh + ' обычных, ' + read + ' из кэша, ' + wrote + ' записано в кэш; выход: ' + (u.output_tokens || 0) +
         (read ? ' · кэш сработал' : wrote ? ' · кэш создан, со следующего резюме будет дешевле' : '') +
-        (u.repaired ? ' · была доработка (обязанности / «О себе»)' : '') + '</div>';
+        (u.repaired ? ' · была доработка (обязанности / «О себе»)' : '') + (u.batch ? ' · пакет (−50% на основной запрос)' : '') + '</div>';
     }
-    $('btnAI').disabled = ai.state === 'busy';
+    $('btnAI').disabled = ai.state === 'busy' || ai.state === 'batch';
     $('btnAI').textContent = ai.state === 'done' ? 'Обработать заново' : 'Обработать через Claude';
     $('btnRaw').hidden = current.raw === current.text;
     $('btnRaw').textContent = showRaw ? 'Вернуться к результату' : 'Показать оригинал';
@@ -293,6 +420,9 @@
   $('btnDefaultRules').onclick = () => { $('aiRules').value = DEFAULT_RULES; };
   $('btnForgetKey').onclick = () => { $('apiKey').value = ''; saveSettings(); };
   $('settings').onclick = e => { if (e.target === $('settings')) $('settings').hidden = true; };
+  $('btnBatch').onclick = sendBatch;
   renderAiState();
+  renderBatchState();
+  restoreBatch();
   $('btnZip').onclick = downloadAll;
 })();

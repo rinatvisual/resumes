@@ -98,3 +98,5 @@ button { font: inherit; }
 .paper .photo { float: left; width: 28%; max-width: 190px; margin: 0 4% 12px 0; }
 .paper .headblock { overflow: hidden; }
 .ver { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+.batch-state { background: #eef3fc; color: var(--brand); padding: 8px 20px; font-size: 13px; border-bottom: 1px solid var(--line); }
+.settings-box label.check { align-items: flex-start; }

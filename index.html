@@ -4,19 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Резюме по шаблону</title>
-<link rel="stylesheet" href="style.css?v=2026.10.14-1">
+<link rel="stylesheet" href="style.css?v=2026.10.14-2">
 </head>
 <body>
 <header class="top">
   <div class="brand">
     <span class="logo">Р</span>
     <div>
-      <h1>Резюме по шаблону <span class="ver">версия 2026.10.14-1</span></h1>
+      <h1>Резюме по шаблону <span class="ver">версия 2026.10.14-2</span></h1>
       <p>Загрузите .docx или .txt — получите Word в едином оформлении. Пропущенные блоки отмечаются красным.</p>
     </div>
   </div>
   <div class="top-actions">
     <span id="aiState" class="ai-state"></span>
+    <button id="btnBatch" class="btn" hidden>Отправить пакетом</button>
     <button id="btnSettings" class="btn ghost">Настройки Claude</button>
     <button id="btnZip" class="btn ghost" disabled>Скачать все (.zip)</button>
   </div>
@@ -46,6 +47,7 @@
         <option value="5m">5 минут — выгодно, если резюме идут подряд одно за другим</option>
       </select>
     </label>
+    <label class="check"><input id="aiBatch" type="checkbox"> Пакетная обработка — в 2 раза дешевле, но результат приходит не сразу (обычно до часа, максимум 24 часа). Загрузите резюме и нажмите «Отправить пакетом» вверху.</label>
     <label class="check"><input id="aiAuto" type="checkbox" checked> Обрабатывать через Claude сразу при загрузке</label>
     <div class="settings-actions">
       <button id="btnForgetKey" class="btn ghost">Удалить ключ</button>
@@ -54,12 +56,14 @@
   </div>
 </div>
 
+<div id="batchState" class="batch-state" hidden></div>
+
 <main class="layout">
   <aside class="side">
     <label id="drop" class="drop">
-      <input id="fileInput" type="file" accept=".docx,.txt,text/plain" multiple hidden>
+      <input id="fileInput" type="file" accept=".docx,.txt,.zip,text/plain" multiple hidden>
       <strong>Перетащите файлы сюда</strong>
-      <span>или нажмите, чтобы выбрать<br>.docx, .txt — можно несколько</span>
+      <span>или нажмите, чтобы выбрать<br>.docx, .txt или .zip-архив — можно несколько</span>
     </label>
     <button id="btnPaste" class="btn ghost wide">+ Вставить текст вручную</button>
     <ul id="list" class="list"></ul>
@@ -101,10 +105,10 @@
   </section>
 </main>
 
-<script src="lib/jszip.min.js?v=2026.10.14-1"></script>
-<script src="template.js?v=2026.10.14-1"></script>
-<script src="resume.js?v=2026.10.14-1"></script>
-<script src="ai.js?v=2026.10.14-1"></script>
-<script src="app.js?v=2026.10.14-1"></script>
+<script src="lib/jszip.min.js?v=2026.10.14-2"></script>
+<script src="template.js?v=2026.10.14-2"></script>
+<script src="resume.js?v=2026.10.14-2"></script>
+<script src="ai.js?v=2026.10.14-2"></script>
+<script src="app.js?v=2026.10.14-2"></script>
 </body>
 </html>

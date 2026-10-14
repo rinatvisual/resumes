@@ -126,8 +126,8 @@
     return out.join('\n').trim();
   }
 
-  // Запрос к Claude
-  async function process(text, apiKey, model, customRules, cacheTtl) {
+  // Тело основного запроса (общее для обычного и пакетного режима)
+  function buildMainBody(text, model, customRules, cacheTtl) {
     const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
     const system = [{ type: 'text', text: systemPrompt() }];
     if (customRules && customRules.trim()) {
@@ -135,15 +135,25 @@
     }
     // метка кэша на последнем блоке: в кэш попадают описание блоков, инструкция и правила рекрутера
     system[system.length - 1].cache_control = cacheTtl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' };
-    const first = await call(apiKey, {
+    return {
       model,
       max_tokens: 6000,
       system,
       tools: [TOOL],
       tool_choice: { type: 'tool', name: 'save_resume' },
       messages: [{ role: 'user', content: 'Сегодня ' + today + '\n\nРезюме кандидата:\n\n' + compact(text) }]
-    });
-    const d = first.input, usage = Object.assign({}, first.usage);
+    };
+  }
+
+  // Обычный режим: основной запрос + доработка и проверки
+  async function process(text, apiKey, model, customRules, cacheTtl) {
+    const first = await call(apiKey, buildMainBody(text, model, customRules, cacheTtl));
+    return finish(first.input, first.usage, text, apiKey, model);
+  }
+
+  // Доработка и проверки после основного ответа (обычный и пакетный режим)
+  async function finish(input, firstUsage, text, apiKey, model) {
+    const d = input, usage = Object.assign({}, firstUsage);
     d.warnings = d.warnings || [];
 
     // Проверка ответа: если Haiku не довёл обязанности или «О себе» до нормы — доработка (до 2 заходов)
@@ -376,6 +386,42 @@
     return data;
   }
 
+  // ---------- Пакетная обработка (Message Batches API, −50% к цене) ----------
+  async function batchCreate(apiKey, requests) {
+    return callRawPath(apiKey, 'POST', '/v1/messages/batches', { requests });
+  }
+  async function batchGet(apiKey, id) {
+    return callRawPath(apiKey, 'GET', '/v1/messages/batches/' + id);
+  }
+  // результаты — JSONL: по строке на резюме; возвращаем { custom_id: {input, usage} | {error} }
+  async function batchResults(apiKey, url) {
+    const res = await fetch(url, { headers: apiHeaders(apiKey) });
+    if (!res.ok) throw new Error('Не удалось получить результаты пакета: ' + res.status);
+    const out = {};
+    (await res.text()).split('\n').filter(Boolean).forEach(line => {
+      const r = JSON.parse(line), res2 = r.result || {};
+      if (res2.type === 'succeeded') {
+        const block = (res2.message.content || []).find(b => b.type === 'tool_use');
+        out[r.custom_id] = block ? { input: block.input, usage: res2.message.usage || {} } : { error: 'Claude не вернул данные резюме' };
+      } else {
+        out[r.custom_id] = { error: res2.type === 'expired' ? 'не успело обработаться за 24 часа' : res2.type === 'canceled' ? 'пакет отменён' : ((res2.error && (res2.error.error || res2.error).message) || 'ошибка') };
+      }
+    });
+    return out;
+  }
+  const apiHeaders = apiKey => ({
+    'content-type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true'
+  });
+  async function callRawPath(apiKey, method, path, body) {
+    const res = await fetch('https://api.anthropic.com' + path, { method, headers: apiHeaders(apiKey), body: body ? JSON.stringify(body) : undefined });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error('Ошибка Claude API ' + res.status + ': ' + ((data.error && data.error.message) || res.statusText));
+    return data;
+  }
+
   // ---------- Перевод ответа Claude в текст «канонического» вида ----------
   const v = s => (s == null ? '' : String(s).trim());
   const pt = p => (p.month ? MONTHS[p.month - 1] + ' ' : '') + p.year;
@@ -432,5 +478,5 @@
     return L.join('\n');
   }
 
-  root.ResumeAI = { process, toCanonicalText, compact, checkRules, guard, TOOL, systemPrompt };
+  root.ResumeAI = { process, finish, buildMainBody, batchCreate, batchGet, batchResults, toCanonicalText, compact, checkRules, guard, TOOL, systemPrompt };
 })(typeof window !== 'undefined' ? window : globalThis);
