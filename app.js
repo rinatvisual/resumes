@@ -63,6 +63,7 @@
     store.set('claude_auto', cfg.auto ? '1' : '0');
     $('settings').hidden = true;
     $('btnBatch').onclick = sendBatch;
+  $('btnRecover').onclick = recoverBatch;
   renderAiState();
   renderBatchState();
   restoreBatch();
@@ -137,16 +138,16 @@
     setTimeout(pollBatch, 30000);
   }
 
-  async function finishBatch(b) {
+  async function finishBatch(b, its) {
     const res = await ResumeAI.batchResults(cfg.key, b.results_url, cfg.proxy);
-    const its = items.filter(it => batch.ids.includes(it.id));
+    its = its || items.filter(it => batch.ids.includes(it.id));
     batch = null;
     renderBatchState();
     // запись о пакете удаляем только после доработки ВСЕХ резюме: если обновить страницу посреди
     // доработки, пакет снова найдётся и результаты заберутся заново (они хранятся у Anthropic 29 дней)
     // доработка и проверки — обычными запросами, по очереди
     for (const it of its) {
-      const r = res['r' + it.id];
+      const r = res['r' + it.id] || res[it.recoverKey];
       if (!r || r.error) { it.ai = { state: 'error', error: 'Пакет: ' + ((r && r.error) || 'нет результата') }; refresh(it); continue; }
       it.ai = { state: 'busy' }; refresh(it);
       try {
@@ -170,6 +171,34 @@
       st.hidden = false;
       st.textContent = 'Пакет в работе: готово ' + done + ' из ' + batch.ids.length + ' · проверяю раз в 30 сек. Страницу можно закрыть — пакет продолжится при следующем открытии.';
     } else st.hidden = true;
+  }
+
+  // Забрать результаты последнего готового пакета (если страница была закрыта или обновлена).
+  // Сначала загрузите те же резюме (тот же архив). Результаты сопоставляются по ФИО кандидата.
+  async function recoverBatch() {
+    if (!cfg.key || !cfg.proxy) { alert('Нужны ключ API и адрес посредника в «Настройках Claude».'); return; }
+    if (!items.length) { alert('Сначала загрузите те же резюме (тот же архив), что отправляли пакетом.'); return; }
+    $('settings').hidden = true;
+    try {
+      const list = await ResumeAI.batchList(cfg.key, cfg.proxy);
+      const b = (list.data || []).find(x => x.processing_status === 'ended' && x.results_url);
+      if (!b) { alert('Готовых пакетов не найдено. Если пакет ещё в работе — подождите и попробуйте позже.'); return; }
+      const res = await ResumeAI.batchResults(cfg.key, b.results_url, cfg.proxy);
+      const norm = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^а-яa-z]/g, '');
+      const byName = {};
+      Object.entries(res).forEach(([k, r]) => { if (r.input && r.input.name) byName[norm(r.input.name)] = k; });
+      const its = [];
+      items.forEach(it => {
+        const k = byName[norm(it.model.name)];
+        if (k && it.ai.state !== 'done') { it.recoverKey = k; its.push(it); }
+      });
+      if (!its.length) { alert('В последнем пакете не нашлось резюме с теми же ФИО, что загружены сейчас.'); return; }
+      if (!confirm('Найден пакет от ' + new Date(b.created_at).toLocaleString('ru-RU') + '. Совпало резюме: ' + its.length + ' из ' + items.length + '. Забрать результаты?')) return;
+      batch = null;
+      await finishBatch(b, its);
+    } catch (e) {
+      alert('Не удалось забрать результаты: ' + e.message);
+    }
   }
 
   // при открытии страницы — продолжить незавершённый пакет
@@ -434,6 +463,7 @@
   $('btnForgetKey').onclick = () => { $('apiKey').value = ''; saveSettings(); };
   $('settings').onclick = e => { if (e.target === $('settings')) $('settings').hidden = true; };
   $('btnBatch').onclick = sendBatch;
+  $('btnRecover').onclick = recoverBatch;
   renderAiState();
   renderBatchState();
   restoreBatch();

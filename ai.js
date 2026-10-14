@@ -391,6 +391,9 @@
   async function batchCreate(apiKey, requests, base) {
     return callRawPath(apiKey, 'POST', '/v1/messages/batches', { requests }, base);
   }
+  async function batchList(apiKey, base) {
+    return callRawPath(apiKey, 'GET', '/v1/messages/batches?limit=10', null, base);
+  }
   async function batchGet(apiKey, id, base) {
     return callRawPath(apiKey, 'GET', '/v1/messages/batches/' + id, null, base);
   }
@@ -479,5 +482,5 @@
     return L.join('\n');
   }
 
-  root.ResumeAI = { process, finish, buildMainBody, batchCreate, batchGet, batchResults, toCanonicalText, compact, checkRules, guard, TOOL, systemPrompt };
+  root.ResumeAI = { process, finish, buildMainBody, batchCreate, batchList, batchGet, batchResults, toCanonicalText, compact, checkRules, guard, TOOL, systemPrompt };
 })(typeof window !== 'undefined' ? window : globalThis);
