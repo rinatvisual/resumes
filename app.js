@@ -196,6 +196,7 @@
     h += GAP + '<p><span class="b' + (m.skills ? '' : ' miss') + '">Навыки: </span>' + (m.skills ? esc(m.skills) : '<span class="miss">[НЕ ЗАПОЛНЕНО: навыки]</span>') + '</p>';
 
     const grp = (g, label, needForm) => g.length ? g.map(lines => lines.map(l => P(l)).join('') +
+      (needForm && !Resume.hasSpecialty(lines) ? MISS('направление / специальность') : '') +
       (needForm && !Resume.hasStudyForm(lines) ? MISS('форма обучения') : '')).join(GAP) : MISS(label);
     h += H('Образование:', !m.edu.length) + grp(m.edu, 'образование', true);
     if (m.addEdu.length) h += H('Доп. образование:', false) + grp(m.addEdu, 'доп. образование');
