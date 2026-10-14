@@ -1,5 +1,5 @@
-// Посредник для запросов к Claude: пропускает только запросы /v1/messages (обычные и пакетные) и добавляет разрешение для сайта
-const ALLOWED = ['https://rinatvisual.github.io', 'null']; // null — сайт, открытый файлом с компьютера
+/* Посредник для запросов к Claude: пропускает только запросы /v1/messages (обычные и пакетные) и добавляет разрешение для сайта */
+const ALLOWED = ['https:/* rinatvisual.github.io', 'null']; // null — сайт, открытый файлом с компьютера */
 
 export default {
   async fetch(req) {
@@ -17,13 +17,13 @@ export default {
       return new Response('Посредник работает (версия 2). Он пропускает только запросы к Claude.', { status: 200, headers: cors });
     }
 
-    // передаём в Anthropic только нужные заголовки; ключ API приходит из браузера и нигде не хранится
+    /* передаём в Anthropic только нужные заголовки; ключ API приходит из браузера и нигде не хранится */
     const headers = new Headers();
     for (const h of ['content-type', 'x-api-key', 'anthropic-version']) {
       const v = req.headers.get(h);
       if (v) headers.set(h, v);
     }
-    const r = await fetch('https://api.anthropic.com' + url.pathname + url.search, {
+    const r = await fetch('https:/* api.anthropic.com' + url.pathname + url.search, { */
       method: req.method,
       headers,
       body: req.method === 'POST' ? await req.arrayBuffer() : undefined
